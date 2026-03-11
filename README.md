@@ -21,6 +21,7 @@ Kafka[(Kafka Event Bus)]
 subgraph Data_Platform
 Settlement[Settlement Service<br/>- Spring Batch]
 Analytics[Analytics Service<br/>- Kafka Streams]
+Ledger[(RDBMS)]
 Warehouse[(OLAP Store)]
 end
 
@@ -33,8 +34,8 @@ Promotion --> Kafka
 Kafka --> Settlement
 Kafka --> Analytics
 
+Settlement --> Ledger
 Analytics --> Warehouse
-Settlement --> Warehouse
 ```
 
 ### 프로젝트 구조
@@ -65,6 +66,20 @@ PaymentConfirmed
 PaymentRefunded
 OrderCancelled
 ```
+
+### 정산 2단계 프로세스
+1. Raw Event 적재 : Kafka 이벤트를 RDBMS 테이블(Raw Table)에 저장 (재처리/감사 가능, 원본 데이터 보존)
+2. 배치 처리 : Reconciliation → Ledger 생성 → Settlement 집계 (하루/주 단위 집계, 오류 검증, 재처리 가능)
+
+Raw Event 적재 단계에서는 MongoDB의 쓰기 성능과 스키마 유연성을 고려하여 이벤트를 MongoDB에 저장하려고  
+했다. 하지만 RDBMS는 MongoDB보다 쓰기 속도가 느릴 수 있으나, SQL을 통한 집계와 정합성 확인이 용이하므로  
+배치 기반 정산에서는 더 직관적이다. 제 현업에서도 RDB 기반의 Raw Event 테이블을 구성하는 경우가 많다.  
+
+배치 처리 단계에서 Reconciliation은 Raw Event 테이블과 Payment 테이블의 데이터를 비교하여 정합성을  
+확인하는 과정이다. 이 과정에서 오류가 발생하면 재처리 및 감사 로그 관리가 용이하다.  
+
+Ledger는 회계 용어로, 총계정원장을 의미하며 기업의 수입, 지출, 자산, 부채 등 모든 금융 거래를 일자별·계정별로  
+정리한 핵심 장부이다. 즉, Ledger 데이터는 필요한 단위로 집계 SQL을 실행한 이후의 데이터라고 이해하면 된다.
 
 
 ## 분석 서비스
