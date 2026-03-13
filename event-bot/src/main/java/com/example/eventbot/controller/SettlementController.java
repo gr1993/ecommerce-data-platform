@@ -36,14 +36,14 @@ public class SettlementController {
     }
 
     @PostMapping("/start")
-    public String start() {
+    @ResponseBody
+    public void start() {
         settlementService.startGeneration();
-        return "redirect:/settlement";
     }
 
     @PostMapping("/stop")
-    public String stop() {
+    @ResponseBody
+    public void stop() {
         settlementService.stopGeneration();
-        return "redirect:/settlement";
     }
 }

@@ -71,13 +71,13 @@
         </form>
 
         <div class="actions">
-            <form action="/settlement/start" method="post" style="flex: 1;" id="startForm" th:styleappend="${settings.running} ? 'display:none' : ''">
-                <button type="submit" class="btn-start">시뮬레이션 시작</button>
-            </form>
+            <div style="flex: 1;" id="startFormContainer" th:styleappend="${settings.running} ? 'display:none' : ''">
+                <button type="button" class="btn-start" onclick="controlSimulation('start')">시뮬레이션 시작</button>
+            </div>
             
-            <form action="/settlement/stop" method="post" style="flex: 1;" id="stopForm" th:styleappend="${!settings.running} ? 'display:none' : ''">
-                <button type="submit" class="btn-stop">즉시 중단</button>
-            </form>
+            <div style="flex: 1;" id="stopFormContainer" th:styleappend="${!settings.running} ? 'display:none' : ''">
+                <button type="button" class="btn-stop" onclick="controlSimulation('stop')">즉시 중단</button>
+            </div>
         </div>
 
         <!-- 시뮬레이션 지표 영역 -->
@@ -129,15 +129,15 @@
                 if (!runningDot) {
                     statusBox.insertAdjacentHTML('beforeend', '<span id="runningDot" style="font-size: 0.8rem;">● 처리 중</span>');
                 }
-                document.getElementById('startForm').style.display = 'none';
-                document.getElementById('stopForm').style.display = 'block';
+                document.getElementById('startFormContainer').style.display = 'none';
+                document.getElementById('stopFormContainer').style.display = 'block';
                 document.getElementById('btnUpdate').disabled = true;
             } else {
                 statusBox.className = 'status-box idle';
                 statusText.innerText = '대기 중';
                 if (runningDot) runningDot.remove();
-                document.getElementById('startForm').style.display = 'block';
-                document.getElementById('stopForm').style.display = 'none';
+                document.getElementById('startFormContainer').style.display = 'block';
+                document.getElementById('stopFormContainer').style.display = 'none';
                 document.getElementById('btnUpdate').disabled = false;
                 
                 if (pollingInterval) {
@@ -169,6 +169,19 @@
             }
         }
 
+        function controlSimulation(action) {
+            fetch('/settlement/' + action, { method: 'POST' })
+                .then(() => {
+                    if (action === 'start') {
+                        if (!pollingInterval) {
+                            pollingInterval = setInterval(fetchStatus, 1000);
+                        }
+                    }
+                    fetchStatus();
+                })
+                .catch(error => console.error('Error controlling simulation:', error));
+        }
+
         function fetchStatus() {
             fetch('/settlement/status')
                 .then(response => response.json())
@@ -181,15 +194,6 @@
         if (initialRunning) {
             pollingInterval = setInterval(fetchStatus, 1000);
         }
-
-        // 시작 버튼 클릭 시 (Form 제출 후 약간의 지연 뒤 폴링 시작)
-        document.getElementById('startForm').addEventListener('submit', () => {
-            setTimeout(() => {
-                if (!pollingInterval) {
-                    pollingInterval = setInterval(fetchStatus, 1000);
-                }
-            }, 500);
-        });
     </script>
 </body>
 </html>
