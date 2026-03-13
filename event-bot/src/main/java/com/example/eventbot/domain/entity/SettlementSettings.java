@@ -1,4 +1,4 @@
-package com.example.eventbot.domain;
+package com.example.eventbot.domain.entity;
 
 public class SettlementSettings {
     private String topic = "settlement-event";

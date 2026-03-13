@@ -18,8 +18,8 @@ com.example.eventbot
 ├── config              # 설정 클래스 (Security, Bean 설정 등)
 ├── controller          # API 엔드포인트 (REST Controller)
 ├── domain              # Entity 및 관련 값 객체 (VO)
-│   ├── entity/         # DB와 매핑되는 JPA 엔티티
-│   ├── event/          # 도메인 이벤트 클래
+│   ├── entity/         # 엔티티 객체
+│   ├── event/          # 도메인 이벤트 클래스
 ├── dto                 # Request/Response 데이터 전송 객체
 │   ├── request
 │   └── response

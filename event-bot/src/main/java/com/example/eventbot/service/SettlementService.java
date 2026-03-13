@@ -1,6 +1,6 @@
 package com.example.eventbot.service;
 
-import com.example.eventbot.domain.SettlementSettings;
+import com.example.eventbot.domain.entity.SettlementSettings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
