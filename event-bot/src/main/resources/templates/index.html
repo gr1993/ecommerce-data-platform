@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>이벤트 제너레이터 대시보드</title>
+    <style>
+        body { font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; margin: 40px; background-color: #f8f9fa; color: #333; }
+        .container { max-width: 1000px; margin: auto; }
+        h1 { color: #212529; text-align: center; margin-bottom: 40px; }
+        .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+        .card { background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); padding: 25px; transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; text-decoration: none; color: inherit; display: block; border: 1px solid #eee; }
+        .card:hover { transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0,0,0,0.12); border-color: #3498db; }
+        .card h2 { margin-top: 0; color: #2c3e50; font-size: 1.4rem; margin-bottom: 12px; }
+        .card p { color: #666; line-height: 1.5; font-size: 0.95rem; }
+        .card .badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; font-weight: bold; background: #e9ecef; color: #495057; margin-top: 15px; }
+        .card.active .badge { background: #d1fae5; color: #065f46; }
+        .disabled { opacity: 0.6; cursor: not-allowed; }
+        .disabled:hover { transform: none; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-color: #eee; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>이벤트 제너레이터 관리 센터</h1>
+        
+        <div class="card-grid">
+            <!-- 정산 이벤트 카드 -->
+            <a href="/settlement" class="card">
+                <h2>정산 이벤트 발생기</h2>
+                <p>Kafka를 통해 정산 트랜잭션 이벤트를 생성합니다. 확률적 오류 데이터 포함 시나리오 테스트가 가능합니다.</p>
+                <span class="badge">설정 및 실행 가능</span>
+            </a>
+
+            <!-- 향후 추가될 대시보드 이벤트 카드 (비활성) -->
+            <div class="card disabled">
+                <h2>대시보드 통계 이벤트</h2>
+                <p>실시간 대시보드 업데이트를 위한 통계성 메트릭 이벤트를 생성합니다.</p>
+                <span class="badge">준비 중</span>
+            </div>
+
+            <div class="card disabled">
+                <h2>기타 시스템 알림</h2>
+                <p>시스템 장애 및 상태 변경 알림 이벤트를 임의로 발생시킵니다.</p>
+                <span class="badge">준비 중</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

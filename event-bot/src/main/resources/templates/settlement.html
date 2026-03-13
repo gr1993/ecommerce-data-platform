@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>정산 이벤트 설정 - 관리자</title>
+    <style>
+        body { font-family: 'Pretendard', sans-serif; margin: 40px; background-color: #f8f9fa; color: #333; }
+        .container { max-width: 700px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        .nav-back { margin-bottom: 20px; display: inline-block; text-decoration: none; color: #3498db; font-weight: bold; }
+        h1 { color: #2c3e50; margin-top: 0; padding-bottom: 15px; border-bottom: 2px solid #f1f3f5; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: 600; color: #495057; }
+        input[type="text"], input[type="number"] { width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #ced4da; box-sizing: border-box; font-size: 1rem; }
+        .status-box { padding: 15px; border-radius: 8px; font-weight: bold; margin-bottom: 25px; display: flex; align-items: center; justify-content: space-between; }
+        .status-box.running { background-color: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+        .status-box.idle { background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+        .actions { display: flex; gap: 12px; margin-top: 25px; }
+        button { flex: 1; padding: 12px; border: none; border-radius: 6px; cursor: pointer; color: white; font-weight: bold; font-size: 1rem; transition: background 0.2s; }
+        .btn-update { background-color: #3498db; }
+        .btn-update:hover { background-color: #2980b9; }
+        .btn-start { background-color: #2ecc71; }
+        .btn-start:hover { background-color: #27ae60; }
+        .btn-stop { background-color: #e74c3c; }
+        .btn-stop:hover { background-color: #c0392b; }
+        .info-text { font-size: 0.85rem; color: #6c757d; margin-top: 6px; }
+        .console-log { margin-top: 30px; background: #1e1e1e; color: #d4d4d4; padding: 20px; border-radius: 8px; height: 180px; overflow-y: auto; font-family: 'Consolas', monospace; font-size: 0.9rem; line-height: 1.4; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="nav-back">← 대시보드로 돌아가기</a>
+        <h1>정산 이벤트 설정</h1>
+        
+        <div th:class="${settings.running} ? 'status-box running' : 'status-box idle'">
+            <span>현재 상태: <span th:text="${settings.running} ? '실행 중' : '대기 중'">대기 중</span></span>
+            <span th:if="${settings.running}" style="font-size: 0.8rem;">● 처리 중</span>
+        </div>
+
+        <form action="/settlement/update-settings" method="post">
+            <div class="form-group">
+                <label for="topic">Kafka 토픽명</label>
+                <input type="text" id="topic" name="topic" th:value="${settings.topic}" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="count">생성할 이벤트 개수</label>
+                <input type="number" id="count" name="count" th:value="${settings.eventCount}" min="1" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="errorProb">오류 데이터 발생 확률 (0.0 ~ 1.0)</label>
+                <input type="number" step="0.01" id="errorProb" name="errorProb" th:value="${settings.errorProbability}" min="0" max="1" required>
+                <p class="info-text">정산 대조(Reconciliation) 로직 검증을 위해 누락되거나 잘못된 데이터를 생성할 확률입니다.</p>
+            </div>
+            
+            <button type="submit" class="btn-update" th:disabled="${settings.running}">설정 저장</button>
+        </form>
+
+        <div class="actions">
+            <form action="/settlement/start" method="post" style="flex: 1;" th:if="${!settings.running}">
+                <button type="submit" class="btn-start">생성 시작</button>
+            </form>
+            
+            <form action="/settlement/stop" method="post" style="flex: 1;" th:if="${settings.running}">
+                <button type="submit" class="btn-stop">즉시 중단</button>
+            </form>
+        </div>
+
+        <div class="console-log">
+            [SYSTEM] 정산 이벤트 제너레이터가 준비되었습니다.<br>
+            [CONFIG] 토픽: <span th:text="${settings.topic}"></span>, 개수: <span th:text="${settings.eventCount}"></span>, 확률: <span th:text="${settings.errorProbability}"></span><br>
+            <span th:if="${settings.running}">[RUNNING] 이벤트 생성 프로세스가 가동 중입니다. 상세 로그는 서버 콘솔을 확인하세요.</span>
+        </div>
+    </div>
+</body>
+</html>

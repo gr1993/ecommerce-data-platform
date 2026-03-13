@@ -11,6 +11,27 @@
 오류 데이터를 생성하는 기능은 정산 시스템의 Reconciliation(대조) 로직을 검증하기 위해 필수적인 요소이다.  
 
 
+### 프로젝트 패키지 구조
+```
+com.example.eventbot
+├── common              # 유틸리티, 공통 상수
+├── config              # 설정 클래스 (Security, Bean 설정 등)
+├── controller          # API 엔드포인트 (REST Controller)
+├── domain              # Entity 및 관련 값 객체 (VO)
+│   ├── entity/         # DB와 매핑되는 JPA 엔티티
+│   ├── event/          # 도메인 이벤트 클래
+├── dto                 # Request/Response 데이터 전송 객체
+│   ├── request
+│   └── response
+├── exception           # 커스텀 예외 처리 및 Global Handler
+├── repository          # DB 접근 (Spring Data JPA Interface 등)
+└── service             # 비즈니스 로직 인터페이스 및 구현체
+```
+
+이 프로젝트는 Stateless 기반으로 동작하도록 설계되었기 때문에, 애플리케이션 설정 파일에는 초기 동작을 위한  
+기본 설정만 정의할 예정이다. 웹 UI를 통해 변경되는 설정 값들은 별도의 저장소에 영구 저장하지 않고 애플리케이션  
+메모리에만 유지된다. 따라서 서버가 재시작되면 웹 UI에서 설정했던 값들은 모두 초기화되며, 다시 설정해야 한다.  
+
 
 
 Loop + Sleep 방식 보다도 rateLimit 기술을 사용해서 부하 발생기에 요청 수를 통제하는 방식도 고려해볼만 하다.
