@@ -5,6 +5,8 @@ import com.example.eventbot.domain.event.OrderCancelledEvent;
 import com.example.eventbot.domain.event.OrderCreatedEvent;
 import com.example.eventbot.domain.event.PaymentCancelledEvent;
 import com.example.eventbot.domain.event.PaymentConfirmedEvent;
+import com.example.eventbot.dto.request.SettlementSettingsRequest;
+import com.example.eventbot.dto.response.SettlementSettingsResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,27 +29,43 @@ public class SettlementService {
         return settings;
     }
 
+    public SettlementSettingsResponse getSettingsResponse() {
+        return SettlementSettingsResponse.builder()
+                .count(settings.getEventCount())
+                .interval(settings.getIntervalSeconds())
+                .perBatch(settings.getEventsPerBatch())
+                .errorProb(settings.getErrorProbability())
+                .running(settings.isRunning())
+                .build();
+    }
+
     public void startGeneration() {
         if (settings.isRunning()) return;
 
         settings.setRunning(true);
-        log.info("[정산] 이벤트 생성 시작: 토픽={}, 횟수={}, 오류확률={}",
-                settings.getTopic(), settings.getEventCount(), settings.getErrorProbability());
+        log.info("[정산] 시뮬레이션 시작: 총 {}회 발행, 간격 {}초, 1회당 {}개 이벤트, 오류확률 {}%",
+                settings.getEventCount(), settings.getIntervalSeconds(), settings.getEventsPerBatch(), (int)(settings.getErrorProbability() * 100));
 
         new Thread(() -> {
             try {
                 for (int i = 0; i < settings.getEventCount(); i++) {
                     if (!settings.isRunning()) break;
 
-                    publishRandomEvent();
+                    log.info("[정산] {}/{} 회차 발행 시작 ({}개 이벤트)", i + 1, settings.getEventCount(), settings.getEventsPerBatch());
+                    
+                    for (int j = 0; j < settings.getEventsPerBatch(); j++) {
+                        publishRandomEvent();
+                    }
 
-                    Thread.sleep(500);
+                    if (i < settings.getEventCount() - 1) {
+                        Thread.sleep(settings.getIntervalSeconds() * 1000L);
+                    }
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             } finally {
                 settings.setRunning(false);
-                log.info("[정산] 이벤트 생성 완료.");
+                log.info("[정산] 시뮬레이션 완료.");
             }
         }).start();
     }
@@ -142,10 +160,12 @@ public class SettlementService {
         log.info("[정산] 이벤트 생성 사용자 중단.");
     }
 
-    public void updateSettings(String topic, int count, double errorProb) {
-        settings.setTopic(topic);
-        settings.setEventCount(count);
-        settings.setErrorProbability(errorProb);
-        log.info("[정산] 설정 변경: 토픽={}, 횟수={}, 오류확률={}", topic, count, errorProb);
+    public void updateSettings(SettlementSettingsRequest request) {
+        settings.setEventCount(request.getCount());
+        settings.setIntervalSeconds(request.getInterval());
+        settings.setEventsPerBatch(request.getPerBatch());
+        settings.setErrorProbability(request.getErrorProb());
+        log.info("[정산] 설정 변경: 횟수={}, 간격={}, 1회당={}, 오류확률={}", 
+            request.getCount(), request.getInterval(), request.getPerBatch(), request.getErrorProb());
     }
 }

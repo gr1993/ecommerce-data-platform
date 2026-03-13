@@ -1,18 +1,14 @@
 package com.example.eventbot.domain.entity;
 
-public class SettlementSettings {
-    private String topic = "settlement-event";
-    private int eventCount = 50;
-    private double errorProbability = 0.1; // 10% 확률로 오류 데이터 생성
-    private boolean running = false;
+import lombok.Getter;
+import lombok.Setter;
 
-    // Getters and Setters
-    public String getTopic() { return topic; }
-    public void setTopic(String topic) { this.topic = topic; }
-    public int getEventCount() { return eventCount; }
-    public void setEventCount(int eventCount) { this.eventCount = eventCount; }
-    public double getErrorProbability() { return errorProbability; }
-    public void setErrorProbability(double errorProbability) { this.errorProbability = errorProbability; }
-    public boolean isRunning() { return running; }
-    public void setRunning(boolean running) { this.running = running; }
+@Getter
+@Setter
+public class SettlementSettings {
+    private int eventCount = 10;           // 발행 횟수
+    private int intervalSeconds = 1;       // 발행 간격(초)
+    private int eventsPerBatch = 1;        // 1회 발행 이벤트 수
+    private double errorProbability = 0.1; // 오류 데이터 발생 확률
+    private boolean running = false;
 }

@@ -24,27 +24,33 @@
         .btn-stop:hover { background-color: #c0392b; }
         .info-text { font-size: 0.85rem; color: #6c757d; margin-top: 6px; }
         .console-log { margin-top: 30px; background: #1e1e1e; color: #d4d4d4; padding: 20px; border-radius: 8px; height: 180px; overflow-y: auto; font-family: 'Consolas', monospace; font-size: 0.9rem; line-height: 1.4; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; }
     </style>
 </head>
 <body>
     <div class="container">
         <a href="/" class="nav-back">← 대시보드로 돌아가기</a>
-        <h1>정산 이벤트 설정</h1>
+        <h1>정산 이벤트 시뮬레이션 설정</h1>
         
         <div th:class="${settings.running} ? 'status-box running' : 'status-box idle'">
-            <span>현재 상태: <span th:text="${settings.running} ? '실행 중' : '대기 중'">대기 중</span></span>
+            <span>현재 상태: <span th:text="${settings.running} ? '시뮬레이션 중' : '대기 중'">대기 중</span></span>
             <span th:if="${settings.running}" style="font-size: 0.8rem;">● 처리 중</span>
         </div>
 
         <form action="/settlement/update-settings" method="post">
-            <div class="form-group">
-                <label for="topic">Kafka 토픽명</label>
-                <input type="text" id="topic" name="topic" th:value="${settings.topic}" required>
-            </div>
-            
-            <div class="form-group">
-                <label for="count">생성할 이벤트 개수</label>
-                <input type="number" id="count" name="count" th:value="${settings.eventCount}" min="1" required>
+            <div class="grid-3">
+                <div class="form-group">
+                    <label for="count">발행 횟수</label>
+                    <input type="number" id="count" name="count" th:value="${settings.eventCount}" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label for="interval">발행 간격 (초)</label>
+                    <input type="number" id="interval" name="interval" th:value="${settings.intervalSeconds}" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="perBatch">1회당 이벤트 수</label>
+                    <input type="number" id="perBatch" name="perBatch" th:value="${settings.eventsPerBatch}" min="1" required>
+                </div>
             </div>
             
             <div class="form-group">
@@ -58,7 +64,7 @@
 
         <div class="actions">
             <form action="/settlement/start" method="post" style="flex: 1;" th:if="${!settings.running}">
-                <button type="submit" class="btn-start">생성 시작</button>
+                <button type="submit" class="btn-start">시뮬레이션 시작</button>
             </form>
             
             <form action="/settlement/stop" method="post" style="flex: 1;" th:if="${settings.running}">
@@ -67,9 +73,12 @@
         </div>
 
         <div class="console-log">
-            [SYSTEM] 정산 이벤트 제너레이터가 준비되었습니다.<br>
-            [CONFIG] 토픽: <span th:text="${settings.topic}"></span>, 개수: <span th:text="${settings.eventCount}"></span>, 확률: <span th:text="${settings.errorProbability}"></span><br>
-            <span th:if="${settings.running}">[RUNNING] 이벤트 생성 프로세스가 가동 중입니다. 상세 로그는 서버 콘솔을 확인하세요.</span>
+            [SYSTEM] 시뮬레이터가 준비되었습니다.<br>
+            [CONFIG] 총 발행: <span th:text="${settings.eventCount * settings.eventsPerBatch}"></span>개 
+            (횟수: <span th:text="${settings.eventCount}"></span>, 1회당: <span th:text="${settings.eventsPerBatch}"></span>), 
+            간격: <span th:text="${settings.intervalSeconds}"></span>초, 
+            확률: <span th:text="${settings.errorProbability}"></span><br>
+            <span th:if="${settings.running}">[RUNNING] 시뮬레이션이 진행 중입니다. 상세 내용은 서버 로그를 확인하세요.</span>
         </div>
     </div>
 </body>
