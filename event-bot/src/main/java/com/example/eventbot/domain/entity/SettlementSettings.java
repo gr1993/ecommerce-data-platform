@@ -11,4 +11,17 @@ public class SettlementSettings {
     private int eventsPerBatch = 1;        // 1회 발행 이벤트 수
     private double errorProbability = 0.1; // 오류 데이터 발생 확률
     private boolean running = false;
+
+    // 실시간 상태 추적용 (Stateless 원칙에 따라 메모리 유지)
+    private int processedCount = 0;        // 현재까지 발행된 총 이벤트 수
+    private int errorCount = 0;            // 현재까지 발생한 총 오류 수
+
+    public int getTotalTargetCount() {
+        return eventCount * eventsPerBatch;
+    }
+
+    public void resetCounts() {
+        this.processedCount = 0;
+        this.errorCount = 0;
+    }
 }

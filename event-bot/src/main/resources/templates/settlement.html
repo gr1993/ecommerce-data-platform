@@ -23,8 +23,17 @@
         .btn-stop { background-color: #e74c3c; }
         .btn-stop:hover { background-color: #c0392b; }
         .info-text { font-size: 0.85rem; color: #6c757d; margin-top: 6px; }
-        .console-log { margin-top: 30px; background: #1e1e1e; color: #d4d4d4; padding: 20px; border-radius: 8px; height: 180px; overflow-y: auto; font-family: 'Consolas', monospace; font-size: 0.9rem; line-height: 1.4; }
         .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; }
+        
+        /* 시뮬레이션 지표 스타일 */
+        .metrics-container { margin-top: 30px; border-top: 2px solid #f1f3f5; pt: 20px; }
+        .metric-card { background: #fff; border: 1px solid #e9ecef; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
+        .metric-header { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 0.9rem; font-weight: bold; }
+        .progress-bar-bg { background: #e9ecef; border-radius: 10px; height: 12px; width: 100%; overflow: hidden; }
+        .progress-bar-fill { background: #3498db; height: 100%; width: 0%; transition: width 0.3s ease; }
+        .progress-bar-fill.error { background: #e74c3c; }
+        .metric-value { font-size: 1.2rem; font-weight: bold; color: #2c3e50; }
+        .metric-label { font-size: 0.8rem; color: #6c757d; }
     </style>
 </head>
 <body>
@@ -32,12 +41,12 @@
         <a href="/" class="nav-back">← 대시보드로 돌아가기</a>
         <h1>정산 이벤트 시뮬레이션 설정</h1>
         
-        <div th:class="${settings.running} ? 'status-box running' : 'status-box idle'">
-            <span>현재 상태: <span th:text="${settings.running} ? '시뮬레이션 중' : '대기 중'">대기 중</span></span>
-            <span th:if="${settings.running}" style="font-size: 0.8rem;">● 처리 중</span>
+        <div id="statusBox" th:class="${settings.running} ? 'status-box running' : 'status-box idle'">
+            <span>현재 상태: <span id="statusText" th:text="${settings.running} ? '시뮬레이션 중' : '대기 중'">대기 중</span></span>
+            <span th:if="${settings.running}" id="runningDot" style="font-size: 0.8rem;">● 처리 중</span>
         </div>
 
-        <form action="/settlement/update-settings" method="post">
+        <form action="/settlement/update-settings" method="post" id="settingsForm">
             <div class="grid-3">
                 <div class="form-group">
                     <label for="count">발행 횟수</label>
@@ -56,30 +65,131 @@
             <div class="form-group">
                 <label for="errorProb">오류 데이터 발생 확률 (0.0 ~ 1.0)</label>
                 <input type="number" step="0.01" id="errorProb" name="errorProb" th:value="${settings.errorProbability}" min="0" max="1" required>
-                <p class="info-text">정산 대조(Reconciliation) 로직 검증을 위해 누락되거나 잘못된 데이터를 생성할 확률입니다.</p>
             </div>
             
-            <button type="submit" class="btn-update" th:disabled="${settings.running}">설정 저장</button>
+            <button type="submit" class="btn-update" id="btnUpdate" th:disabled="${settings.running}">설정 저장</button>
         </form>
 
         <div class="actions">
-            <form action="/settlement/start" method="post" style="flex: 1;" th:if="${!settings.running}">
+            <form action="/settlement/start" method="post" style="flex: 1;" id="startForm" th:styleappend="${settings.running} ? 'display:none' : ''">
                 <button type="submit" class="btn-start">시뮬레이션 시작</button>
             </form>
             
-            <form action="/settlement/stop" method="post" style="flex: 1;" th:if="${settings.running}">
+            <form action="/settlement/stop" method="post" style="flex: 1;" id="stopForm" th:styleappend="${!settings.running} ? 'display:none' : ''">
                 <button type="submit" class="btn-stop">즉시 중단</button>
             </form>
         </div>
 
-        <div class="console-log">
-            [SYSTEM] 시뮬레이터가 준비되었습니다.<br>
-            [CONFIG] 총 발행: <span th:text="${settings.eventCount * settings.eventsPerBatch}"></span>개 
-            (횟수: <span th:text="${settings.eventCount}"></span>, 1회당: <span th:text="${settings.eventsPerBatch}"></span>), 
-            간격: <span th:text="${settings.intervalSeconds}"></span>초, 
-            확률: <span th:text="${settings.errorProbability}"></span><br>
-            <span th:if="${settings.running}">[RUNNING] 시뮬레이션이 진행 중입니다. 상세 내용은 서버 로그를 확인하세요.</span>
+        <!-- 시뮬레이션 지표 영역 -->
+        <div class="metrics-container" id="metricsContainer" th:style="${settings.running || settings.processedCount > 0} ? '' : 'display:none'">
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span>전체 진행률</span>
+                    <span id="progressPercent">0%</span>
+                </div>
+                <div class="progress-bar-bg">
+                    <div id="progressBar" class="progress-bar-fill"></div>
+                </div>
+                <div style="margin-top: 8px; text-align: right;">
+                    <span class="metric-label">발행 현황: </span>
+                    <span class="metric-value" id="progressCount">0 / 0</span>
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span>오류 데이터 발생 현황</span>
+                    <span id="errorRateText">오류율: 0%</span>
+                </div>
+                <div class="progress-bar-bg">
+                    <div id="errorBar" class="progress-bar-fill error"></div>
+                </div>
+                <div style="margin-top: 8px; text-align: right;">
+                    <span class="metric-label">오류 수: </span>
+                    <span class="metric-value" id="errorCountText">0</span>
+                </div>
+            </div>
         </div>
     </div>
+
+    <script th:inline="javascript">
+        let pollingInterval = null;
+
+        function updateUI(data) {
+            const isRunning = data.running;
+            
+            // 상태 배지 업데이트
+            const statusBox = document.getElementById('statusBox');
+            const statusText = document.getElementById('statusText');
+            const runningDot = document.getElementById('runningDot');
+            
+            if (isRunning) {
+                statusBox.className = 'status-box running';
+                statusText.innerText = '시뮬레이션 중';
+                if (!runningDot) {
+                    statusBox.insertAdjacentHTML('beforeend', '<span id="runningDot" style="font-size: 0.8rem;">● 처리 중</span>');
+                }
+                document.getElementById('startForm').style.display = 'none';
+                document.getElementById('stopForm').style.display = 'block';
+                document.getElementById('btnUpdate').disabled = true;
+            } else {
+                statusBox.className = 'status-box idle';
+                statusText.innerText = '대기 중';
+                if (runningDot) runningDot.remove();
+                document.getElementById('startForm').style.display = 'block';
+                document.getElementById('stopForm').style.display = 'none';
+                document.getElementById('btnUpdate').disabled = false;
+                
+                if (pollingInterval) {
+                    clearInterval(pollingInterval);
+                    pollingInterval = null;
+                }
+            }
+
+            // 지표 업데이트
+            if (data.processedCount > 0 || isRunning) {
+                document.getElementById('metricsContainer').style.display = 'block';
+                
+                // 진행도
+                const total = data.totalTarget;
+                const processed = data.processedCount;
+                const percent = total > 0 ? Math.round((processed / total) * 100) : 0;
+                
+                document.getElementById('progressBar').style.width = percent + '%';
+                document.getElementById('progressPercent').innerText = percent + '%';
+                document.getElementById('progressCount').innerText = `${processed} / ${total}`;
+                
+                // 오류 현황
+                const errors = data.errorCount;
+                const errorRate = processed > 0 ? Math.round((errors / processed) * 100) : 0;
+                
+                document.getElementById('errorBar').style.width = errorRate + '%';
+                document.getElementById('errorRateText').innerText = `현재 오류율: ${errorRate}%`;
+                document.getElementById('errorCountText').innerText = errors;
+            }
+        }
+
+        function fetchStatus() {
+            fetch('/settlement/status')
+                .then(response => response.json())
+                .then(data => updateUI(data))
+                .catch(error => console.error('Error fetching status:', error));
+        }
+
+        // 초기 로드 시 실행 중이면 폴링 시작
+        const initialRunning = [[${settings.running}]];
+        if (initialRunning) {
+            pollingInterval = setInterval(fetchStatus, 1000);
+        }
+
+        // 시작 버튼 클릭 시 (Form 제출 후 약간의 지연 뒤 폴링 시작)
+        document.getElementById('startForm').addEventListener('submit', () => {
+            setTimeout(() => {
+                if (!pollingInterval) {
+                    pollingInterval = setInterval(fetchStatus, 1000);
+                }
+            }, 500);
+        });
+    </script>
 </body>
 </html>

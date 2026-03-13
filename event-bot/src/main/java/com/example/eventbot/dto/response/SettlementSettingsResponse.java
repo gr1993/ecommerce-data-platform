@@ -11,4 +11,8 @@ public class SettlementSettingsResponse {
     private int perBatch;
     private double errorProb;
     private boolean running;
+
+    private int processedCount;
+    private int errorCount;
+    private int totalTarget;
 }

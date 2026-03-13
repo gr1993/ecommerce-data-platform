@@ -36,25 +36,32 @@ public class SettlementService {
                 .perBatch(settings.getEventsPerBatch())
                 .errorProb(settings.getErrorProbability())
                 .running(settings.isRunning())
+                .processedCount(settings.getProcessedCount())
+                .errorCount(settings.getErrorCount())
+                .totalTarget(settings.getTotalTargetCount())
                 .build();
     }
 
     public void startGeneration() {
         if (settings.isRunning()) return;
 
+        settings.resetCounts();
         settings.setRunning(true);
-        log.info("[정산] 시뮬레이션 시작: 총 {}회 발행, 간격 {}초, 1회당 {}개 이벤트, 오류확률 {}%",
-                settings.getEventCount(), settings.getIntervalSeconds(), settings.getEventsPerBatch(), (int)(settings.getErrorProbability() * 100));
+        log.info("[정산] 시뮬레이션 시작: 총 {}개 이벤트 발행 예정", settings.getTotalTargetCount());
 
         new Thread(() -> {
             try {
                 for (int i = 0; i < settings.getEventCount(); i++) {
                     if (!settings.isRunning()) break;
 
-                    log.info("[정산] {}/{} 회차 발행 시작 ({}개 이벤트)", i + 1, settings.getEventCount(), settings.getEventsPerBatch());
-                    
                     for (int j = 0; j < settings.getEventsPerBatch(); j++) {
-                        publishRandomEvent();
+                        boolean isError = random.nextDouble() < settings.getErrorProbability();
+                        publishRandomEvent(isError);
+                        
+                        settings.setProcessedCount(settings.getProcessedCount() + 1);
+                        if (isError) {
+                            settings.setErrorCount(settings.getErrorCount() + 1);
+                        }
                     }
 
                     if (i < settings.getEventCount() - 1) {
@@ -65,12 +72,14 @@ public class SettlementService {
                 Thread.currentThread().interrupt();
             } finally {
                 settings.setRunning(false);
-                log.info("[정산] 시뮬레이션 완료.");
+                log.info("[정산] 시뮬레이션 완료. (최종: {}/{}, 오류: {})", 
+                    settings.getProcessedCount(), settings.getTotalTargetCount(), settings.getErrorCount());
             }
         }).start();
     }
 
-    private void publishRandomEvent() {
+    private void publishRandomEvent(boolean isError) {
+        // isError가 true일 때 특정 필드를 누락시키거나 값을 틀리게 보낼 수 있음 (추후 구현)
         String orderNumber = "ORD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         int type = random.nextInt(4);
 
