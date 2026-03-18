@@ -35,9 +35,14 @@ ecommerce-data-platform/
 
 
 ### 인프라 구축 명령어
+* [Kafka 구축 블로그](https://little-pecorino-c28.notion.site/Helm-Chart-Kafka-32282094ef0a80c88123dd6e1aa1d505#32282094ef0a80b68543cb482c87a3ec)
 
 ```shell
-
+# Kafka
+kubectl apply -f infra/platforms/kafka/kafka-cluster.yaml -n kafka
+kubectl apply -f infra/platforms/kafka/kafka-ui.yaml -n kafka
+# Kafka UI 연결
+kubectl port-forward svc/kafka-ui -n kafka 8090:80
 ```
 
 
