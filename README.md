@@ -45,10 +45,10 @@ Analytics --> Warehouse
 [docs]
 [event-bot]
     └── ecommerce-msa 환경과 유사하게 가짜 이벤트를 발생시키는 시뮬레이터
-[infra] 
-    └── Kafka, ClickHouse 등 쿠버네티스 인프라 구성 스크립트
 [frontend-service]
     └── 관리자 UI (정산, 대시보드 등)
+[infra] 
+    └── Kafka, ClickHouse 등 쿠버네티스 인프라 구성 스크립트
 [settlement-service]
     └── 정산 서비스
 [analytics-service]

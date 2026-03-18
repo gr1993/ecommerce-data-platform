@@ -4,7 +4,7 @@ import './AdminLayout.css'
 
 function AdminLayout() {
   const location = useLocation()
-  const [openMenus, setOpenMenus] = useState<string[]>(['settlement'])
+  const [openMenus, setOpenMenus] = useState<string[]>(['settlement', 'analysis'])
 
   const toggleMenu = (menuKey: string) => {
     setOpenMenus(prev =>
@@ -38,6 +38,27 @@ function AdminLayout() {
               </Link>
             </div>
 
+            {/* 통계/분석 */}
+            <div className="nav-menu-item">
+              <div 
+                className={`nav-parent ${isActiveParent(['/admin/analysis']) ? 'active-parent' : ''}`}
+                onClick={() => toggleMenu('analysis')}
+              >
+                <span>통계/분석</span>
+                <span className={`nav-arrow ${isMenuOpen('analysis') ? 'open' : ''}`}>▼</span>
+              </div>
+              {isMenuOpen('analysis') && (
+                <div className="nav-submenu">
+                  <Link 
+                    to="/admin/analysis/statistics" 
+                    className={`nav-link submenu-link ${isActive('/admin/analysis/statistics') ? 'active' : ''}`}
+                  >
+                    매출 통계
+                  </Link>
+                </div>
+              )}
+            </div>
+
             {/* 정산 관리 */}
             <div className="nav-menu-item">
               <div 
@@ -53,13 +74,7 @@ function AdminLayout() {
                     to="/admin/settlement/manage" 
                     className={`nav-link submenu-link ${isActive('/admin/settlement/manage') ? 'active' : ''}`}
                   >
-                    정산 현황
-                  </Link>
-                  <Link 
-                    to="/admin/settlement/statistics" 
-                    className={`nav-link submenu-link ${isActive('/admin/settlement/statistics') ? 'active' : ''}`}
-                  >
-                    매출 통계
+                    정산 내역 조회
                   </Link>
                 </div>
               )}
