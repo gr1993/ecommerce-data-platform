@@ -38,6 +38,9 @@ ecommerce-data-platform/
 * [Kafka 구축 블로그](https://little-pecorino-c28.notion.site/Helm-Chart-Kafka-32282094ef0a80c88123dd6e1aa1d505#32282094ef0a80b68543cb482c87a3ec)
 
 ```shell
+# 로컬 개발용 인프라 구축
+docker-compose -f infra/docker-compose.dev.yml up -d
+
 # Kafka
 kubectl apply -f infra/platforms/kafka/kafka-cluster.yaml -n kafka
 kubectl apply -f infra/platforms/kafka/kafka-ui.yaml -n kafka

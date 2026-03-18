@@ -1,0 +1,87 @@
+services:
+  kafka1:
+    image: confluentinc/cp-kafka:latest
+    container_name: kafka1
+    mem_limit: 512m
+    ports:
+      - 9091:9091
+    environment:
+      CLUSTER_ID: "D1tH5zG4aV8cE2jP"
+      KAFKA_CLUSTER_ID: "D1tH5zG4aV8cE2jP"
+      KAFKA_BROKER_ID: 1
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_LISTENERS: "PLAINTEXT://kafka1:9091,CONTROLLER://kafka1:9093"
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:9091
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka1:9093,2@kafka2:9093,3@kafka3:9093"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_TRANSACTION_STATE_LOG_NUM_PARTITIONS: 4
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx256m"
+    networks:
+      - ecommerce-net
+  
+  kafka2:
+    image: confluentinc/cp-kafka:latest
+    container_name: kafka2
+    mem_limit: 512m
+    ports:
+      - 9092:9092
+    environment:
+      CLUSTER_ID: "D1tH5zG4aV8cE2jP"
+      KAFKA_CLUSTER_ID: "D1tH5zG4aV8cE2jP"
+      KAFKA_BROKER_ID: 2
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_LISTENERS: "PLAINTEXT://kafka2:9092,CONTROLLER://kafka2:9093"
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka1:9093,2@kafka2:9093,3@kafka3:9093"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_TRANSACTION_STATE_LOG_NUM_PARTITIONS: 4
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx256m"
+    networks:
+      - ecommerce-net
+
+  kafka3:
+    image: confluentinc/cp-kafka:latest
+    container_name: kafka3
+    mem_limit: 512m
+    ports:
+      - 9094:9094
+    environment:
+      CLUSTER_ID: "D1tH5zG4aV8cE2jP"
+      KAFKA_CLUSTER_ID: "D1tH5zG4aV8cE2jP"
+      KAFKA_BROKER_ID: 3
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_LISTENERS: "PLAINTEXT://kafka3:9094,CONTROLLER://kafka3:9093"
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka3:9094
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka1:9093,2@kafka2:9093,3@kafka3:9093"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_TRANSACTION_STATE_LOG_NUM_PARTITIONS: 4
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx256m"
+    networks:
+      - ecommerce-net
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui
+    container_name: kafka-ui
+    mem_limit: 256m
+    ports:
+      - 8090:8080
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=local-kraft
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka1:9091,kafka2:9092,kafka3:9094
+    networks:
+      - ecommerce-net
+
+
+networks:
+  ecommerce-net:
+    name: ecommerce-net
+    driver: bridge
