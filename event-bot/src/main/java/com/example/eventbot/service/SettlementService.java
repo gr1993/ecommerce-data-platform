@@ -1,9 +1,7 @@
 package com.example.eventbot.service;
 
 import com.example.eventbot.domain.entity.SettlementSettings;
-import com.example.eventbot.domain.event.OrderCancelledEvent;
 import com.example.eventbot.domain.event.OrderCreatedEvent;
-import com.example.eventbot.domain.event.PaymentCancelledEvent;
 import com.example.eventbot.domain.event.PaymentConfirmedEvent;
 import com.example.eventbot.dto.request.SettlementSettingsRequest;
 import com.example.eventbot.dto.response.SettlementSettingsResponse;
@@ -13,7 +11,6 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Random;
 import java.util.UUID;
 
@@ -47,16 +44,21 @@ public class SettlementService {
 
         settings.resetCounts();
         settings.setRunning(true);
-        log.info("[정산] 시뮬레이션 시작: 총 {}개 이벤트 발행 예정", settings.getTotalTargetCount());
+        log.info("[정산] 시뮬레이션 시작: 총 {} 세트 이벤트 발행 예정 (오류 확률: {}%)", 
+            settings.getEventCount(), settings.getErrorProbability() * 100);
 
         new Thread(() -> {
             try {
-                for (int i = 0; i < settings.getEventCount(); i++) {
+                int totalTarget = settings.getEventCount();
+                int batchSize = settings.getEventsPerBatch();
+                
+                for (int i = 0; i < totalTarget; i += batchSize) {
                     if (!settings.isRunning()) break;
 
-                    for (int j = 0; j < settings.getEventsPerBatch(); j++) {
+                    for (int j = 0; j < batchSize && (i + j) < totalTarget; j++) {
+                        // 한 세트의 이벤트 생성 (주문 + 결제)
                         boolean isError = random.nextDouble() < settings.getErrorProbability();
-                        publishRandomEvent(isError);
+                        generateSettlementEventSet(isError);
                         
                         settings.setProcessedCount(settings.getProcessedCount() + 1);
                         if (isError) {
@@ -64,7 +66,7 @@ public class SettlementService {
                         }
                     }
 
-                    if (i < settings.getEventCount() - 1) {
+                    if (i + batchSize < totalTarget) {
                         Thread.sleep(settings.getIntervalSeconds() * 1000L);
                     }
                 }
@@ -73,57 +75,53 @@ public class SettlementService {
                 Thread.currentThread().interrupt();
             } finally {
                 settings.setRunning(false);
-                log.info("[정산] 시뮬레이션 종료. 최종 발행: {}/{}", settings.getProcessedCount(), settings.getTotalTargetCount());
+                log.info("[정산] 시뮬레이션 종료. 최종 발행 세트: {}/{}", settings.getProcessedCount(), settings.getEventCount());
             }
         }).start();
     }
 
-    private void publishRandomEvent(boolean isError) {
-        // 오류 데이터 시나리오: 1. 주문번호 누락(Null) 2. 잘못된 금액(음수) 3. 필수 상태값 누락
-        String orderNumber = (isError && random.nextInt(3) == 0) ? null : "ORD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-        int type = random.nextInt(4);
+    /**
+     * 정산 대조를 위한 이벤트 세트 발행
+     * 정상: OrderCreatedEvent(order-created) -> PaymentConfirmedEvent(payment-confirmed) 순차 발행
+     * 오류: 확률에 따라 둘 중 하나만 발행하여 대조 실패 유도
+     */
+    private void generateSettlementEventSet(boolean isError) {
+        String orderNumber = "ORD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        long amount = (random.nextInt(10) + 1) * 10000L; // 1만 ~ 10만 랜덤 금액
 
-        switch (type) {
-            case 0 -> {
-                BigDecimal amount = (isError && random.nextInt(3) == 1) ? new BigDecimal("-50000") : new BigDecimal("50000");
-                OrderCreatedEvent event = OrderCreatedEvent.builder()
-                        .orderId(random.nextLong(10000))
-                        .orderNumber(orderNumber)
-                        .userId(random.nextLong(1000))
-                        .orderStatus("CREATED")
-                        .totalPaymentAmount(amount)
-                        .orderedAt(LocalDateTime.now())
-                        .build();
-                kafkaProducerService.publishOrderCreated(event);
+        OrderCreatedEvent orderEvent = OrderCreatedEvent.builder()
+                .orderId(random.nextLong(1000000))
+                .orderNumber(orderNumber)
+                .userId(random.nextLong(10000))
+                .orderStatus("CONFIRMED")
+                .totalPaymentAmount(new BigDecimal(amount))
+                .orderedAt(LocalDateTime.now())
+                .build();
+
+        PaymentConfirmedEvent paymentEvent = PaymentConfirmedEvent.builder()
+                .orderNumber(orderNumber)
+                .paymentKey("PAY-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
+                .paymentMethod("CARD")
+                .paymentAmount(amount)
+                .paymentStatus("DONE")
+                .paidAt(LocalDateTime.now().toString())
+                .customerId(String.valueOf(random.nextLong(10000)))
+                .build();
+
+        if (isError) {
+            // 오류 발생 시: 둘 중 하나만 보냄 (대조 불일치 유도)
+            if (random.nextBoolean()) {
+                log.warn("[정산] 오류 시뮬레이션: [주문 생성] 이벤트만 발행 (결제 누락) - 주문번호: {}", orderNumber);
+                kafkaProducerService.publishOrderCreated(orderEvent);
+            } else {
+                log.warn("[정산] 오류 시뮬레이션: [결제 확정] 이벤트만 발행 (주문 누락) - 주문번호: {}", orderNumber);
+                kafkaProducerService.publishPaymentConfirmed(paymentEvent);
             }
-            case 1 -> {
-                OrderCancelledEvent event = OrderCancelledEvent.builder()
-                        .orderId(isError ? null : random.nextLong(10000)) // 필수 ID 누락 오류
-                        .orderNumber(orderNumber)
-                        .cancellationReason("USER_REQUEST")
-                        .cancelledAt(LocalDateTime.now())
-                        .build();
-                kafkaProducerService.publishOrderCancelled(event);
-            }
-            case 2 -> {
-                PaymentConfirmedEvent event = PaymentConfirmedEvent.builder()
-                        .orderNumber(orderNumber)
-                        .paymentKey(UUID.randomUUID().toString())
-                        .paymentAmount(isError ? 0L : 45000L) // 결제 금액 0원 오류
-                        .paymentStatus("DONE")
-                        .paidAt(LocalDateTime.now().toString())
-                        .build();
-                kafkaProducerService.publishPaymentConfirmed(event);
-            }
-            case 3 -> {
-                PaymentCancelledEvent event = PaymentCancelledEvent.builder()
-                        .orderNumber(orderNumber)
-                        .amount(45000L)
-                        .cancelReason(isError ? "" : "ORDER_CANCELLED") // 사유 누락
-                        .cancelledAt(LocalDateTime.now())
-                        .build();
-                kafkaProducerService.publishPaymentCancelled(event);
-            }
+        } else {
+            // 정상 발생 시: 순차 발행
+            kafkaProducerService.publishOrderCreated(orderEvent);
+            kafkaProducerService.publishPaymentConfirmed(paymentEvent);
+            log.info("[정산] 정상 이벤트 세트 발행 완료 - 주문번호: {}", orderNumber);
         }
     }
 
@@ -137,5 +135,7 @@ public class SettlementService {
         settings.setIntervalSeconds(request.getInterval());
         settings.setEventsPerBatch(request.getPerBatch());
         settings.setErrorProbability(request.getErrorProb());
+        log.info("[정산] 설정 업데이트: {}개, {}초 간격, 배치당 {}개, 오류확률 {}%", 
+            request.getCount(), request.getInterval(), request.getPerBatch(), request.getErrorProb() * 100);
     }
 }
