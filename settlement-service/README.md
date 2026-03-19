@@ -1,8 +1,11 @@
 # settlement-service
 정산 서비스는 정산과 관련된 이벤트를 처리하여 Raw 테이블에 저장하고, 배치 스케줄링을 통해 일·주·월  
 단위의 정산 집계 데이터를 생성하고 관리하는 서비스이다.  
-Raw 이벤트 적재는 처음에는 Kafka Connector를 활용해 빠르게 MVP를 구현하고, 이후 검증·재처리·변환  
-로직이 필요할 경우 별도의 Kafka Consumer를 구현하여 보완할 계획이다.  
+Raw 이벤트 적재는 초기에는 Kafka Connector를 활용하여 빠르게 구현하려 했으나, 이전 프로젝트인  
+ecommerce-msa에서는 Kafka에 단순 JSON 구조의 레코드를 저장하는 방식으로 개발되었다.  
+하지만 Kafka Connector는 기본적으로 스키마 정보가 포함된 레코드 처리를 전제로 하는 도구이기 때문에,  
+현재 구조에서는 적합하지 않다고 판단하였다. 이에 따라 정산 서비스에서는 Kafka Consumer를 직접 구현하여  
+Raw 데이터 적재 로직을 처리할 예정이다.  
 
 
 ### Reconciliation(대조)
