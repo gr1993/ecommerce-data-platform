@@ -10,11 +10,13 @@ public class SettlementSettingsResponse {
     private int interval;
     private int perBatch;
     private double errorProb;
+    private int cancelCountTarget;
     private String startDate;
     private String endDate;
     private boolean running;
 
     private int processedCount;
     private int errorCount;
+    private int processedCancelCount;
     private int totalTarget;
 }

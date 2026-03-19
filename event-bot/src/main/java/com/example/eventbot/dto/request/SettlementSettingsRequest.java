@@ -12,6 +12,7 @@ public class SettlementSettingsRequest {
     private int interval;
     private int perBatch;
     private double errorProb;
+    private int cancelCount;
     private String startDate;
     private String endDate;
 }

@@ -82,11 +82,18 @@
                     </div>
                 </div>
                 
-                <div class="form-group">
-                    <label for="errorProb">데이터 불일치(오류) 확률 (0.0 ~ 1.0)</label>
-                    <input type="number" step="0.01" id="errorProb" name="errorProb" th:value="${settings.errorProbability}" min="0" max="1" required>
-                    <p class="info-text">주문 또는 결제 이벤트 중 하나만 발행되어 대조 실패를 유도하는 확률입니다.</p>
+                <div class="grid-3" style="grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <label for="errorProb">데이터 불일치(오류) 확률 (0.0 ~ 1.0)</label>
+                        <input type="number" step="0.01" id="errorProb" name="errorProb" th:value="${settings.errorProbability}" min="0" max="1" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="cancelCount">취소 이벤트 발행 수 (정상 건 중)</label>
+                        <input type="number" id="cancelCount" name="cancelCount" th:value="${settings.cancelCountTarget}" min="0" required>
+                    </div>
                 </div>
+                
+                <p class="info-text">오류 확률은 주문/결제 중 하나가 누락되는 확률이며, 취소는 정상 발행된 세트에 대해 추가로 취소 이벤트를 발생시키는 고정 개수입니다.</p>
                 
                 <button type="submit" class="btn-update" id="btnUpdate">설정 저장 및 초기화</button>
             </form>
@@ -119,6 +126,20 @@
                 <div class="metric-footer">
                     <span class="metric-label">누락 발생 주문 건수</span>
                     <span class="metric-value" id="errorCountText" style="color: #e74c3c;">0</span>
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span>취소(환불) 이벤트 발생 현황</span>
+                    <span id="cancelProgressText" style="color: #f39c12;">0%</span>
+                </div>
+                <div class="progress-bar-bg">
+                    <div id="cancelBar" class="progress-bar-fill" style="background: linear-gradient(90deg, #f39c12, #e67e22);"></div>
+                </div>
+                <div class="metric-footer">
+                    <span class="metric-label">현재 발행 완료 취소 건</span>
+                    <span class="metric-value" id="cancelCountText" style="color: #f39c12;">0 / 0</span>
                 </div>
             </div>
         </div>
@@ -187,20 +208,47 @@
                 document.getElementById('errorBar').style.width = errorRate + '%';
                 document.getElementById('errorRateText').innerText = `불일치율: ${errorRate}%`;
                 document.getElementById('errorCountText').innerText = errors;
+
+                // 취소 데이터 업데이트
+                const cancelTotal = data.cancelCountTarget;
+                const cancelProcessed = data.processedCancelCount;
+                const cancelPercent = cancelTotal > 0 ? Math.round((cancelProcessed / cancelTotal) * 100) : 0;
+                
+                document.getElementById('cancelBar').style.width = cancelPercent + '%';
+                document.getElementById('cancelProgressText').innerText = `발행률: ${cancelPercent}%`;
+                document.getElementById('cancelCountText').innerText = `${cancelProcessed} / ${cancelTotal}`;
             }
         }
 
         function controlSimulation(action) {
-            fetch('/settlement/' + action, { method: 'POST' })
+            if (action === 'start') {
+                // 시작 전 현재 화면의 설정을 먼저 서버에 전송(저장)
+                const form = document.getElementById('settingsForm');
+                const formData = new FormData(form);
+                const params = new URLSearchParams(formData);
+
+                fetch('/settlement/update-settings', {
+                    method: 'POST',
+                    body: params,
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+                })
                 .then(() => {
-                    if (action === 'start') {
-                        if (!pollingInterval) {
-                            pollingInterval = setInterval(fetchStatus, 800);
-                        }
+                    // 저장 성공 후 실제 시뮬레이션 시작 API 호출
+                    return fetch('/settlement/start', { method: 'POST' });
+                })
+                .then(() => {
+                    if (!pollingInterval) {
+                        pollingInterval = setInterval(fetchStatus, 800);
                     }
                     fetchStatus();
                 })
-                .catch(error => console.error('Error:', error));
+                .catch(error => console.error('Error starting simulation:', error));
+            } else {
+                // 중단 로직은 기존과 동일
+                fetch('/settlement/stop', { method: 'POST' })
+                    .then(() => fetchStatus())
+                    .catch(error => console.error('Error stopping simulation:', error));
+            }
         }
 
         function fetchStatus() {
