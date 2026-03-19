@@ -5,7 +5,7 @@ spring:
     password: 123123
   jpa:
     hibernate:
-      ddl-auto: none   # Flyway? ???? ????? ?? ?? ????
+      ddl-auto: none
   flyway:
     enabled: true
     baseline-on-migrate: true
