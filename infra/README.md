@@ -20,7 +20,7 @@ ecommerce-data-platform/
     │   │   ├── statefulset.yaml
     │   │   ├── service.yaml
     │   │   └── configmap.yaml
-    │   ├── mysql/
+    │   ├── postgres/
     │   └── clickhouse/
     └── apps/               # 비즈니스 마이크로서비스 (Stateless 기반)
         ├── order-service.yaml
