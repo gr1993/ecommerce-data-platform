@@ -10,7 +10,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.Random;
 import java.util.UUID;
 
@@ -32,6 +36,8 @@ public class SettlementService {
                 .interval(settings.getIntervalSeconds())
                 .perBatch(settings.getEventsPerBatch())
                 .errorProb(settings.getErrorProbability())
+                .startDate(settings.getStartDate().toString())
+                .endDate(settings.getEndDate().toString())
                 .running(settings.isRunning())
                 .processedCount(settings.getProcessedCount())
                 .errorCount(settings.getErrorCount())
@@ -44,8 +50,10 @@ public class SettlementService {
 
         settings.resetCounts();
         settings.setRunning(true);
-        log.info("[정산] 시뮬레이션 시작: 총 {} 세트 이벤트 발행 예정 (오류 확률: {}%)", 
+        log.info("[정산] 시뮬레이션 시작: {} ~ {} 기간, 총 {} 세트 이벤트 발행 예정 (오류 확률: {}%)", 
+            settings.getStartDate(), settings.getEndDate(),
             settings.getEventCount(), settings.getErrorProbability() * 100);
+        // ... (rest of startGeneration is same)
 
         new Thread(() -> {
             try {
@@ -89,13 +97,19 @@ public class SettlementService {
         String orderNumber = "ORD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         long amount = (random.nextInt(10) + 1) * 10000L; // 1만 ~ 10만 랜덤 금액
 
+        // 설정된 시작일과 종료일 사이의 랜덤한 시각 생성
+        long daysBetween = ChronoUnit.DAYS.between(settings.getStartDate(), settings.getEndDate());
+        LocalDate randomDate = settings.getStartDate().plusDays(random.nextLong(daysBetween + 1));
+        LocalTime randomTime = LocalTime.of(random.nextInt(24), random.nextInt(60), random.nextInt(60));
+        LocalDateTime eventDateTime = LocalDateTime.of(randomDate, randomTime).truncatedTo(ChronoUnit.SECONDS);
+
         OrderCreatedEvent orderEvent = OrderCreatedEvent.builder()
                 .orderId(random.nextLong(1000000))
                 .orderNumber(orderNumber)
                 .userId(random.nextLong(10000))
                 .orderStatus("CONFIRMED")
                 .totalPaymentAmount(new BigDecimal(amount))
-                .orderedAt(LocalDateTime.now())
+                .orderedAt(eventDateTime) // 생성된 랜덤 시각 적용
                 .build();
 
         PaymentConfirmedEvent paymentEvent = PaymentConfirmedEvent.builder()
@@ -104,24 +118,24 @@ public class SettlementService {
                 .paymentMethod("CARD")
                 .paymentAmount(amount)
                 .paymentStatus("DONE")
-                .paidAt(LocalDateTime.now().toString())
+                .paidAt(eventDateTime)
                 .customerId(String.valueOf(random.nextLong(10000)))
                 .build();
 
         if (isError) {
             // 오류 발생 시: 둘 중 하나만 보냄 (대조 불일치 유도)
             if (random.nextBoolean()) {
-                log.warn("[정산] 오류 시뮬레이션: [주문 생성] 이벤트만 발행 (결제 누락) - 주문번호: {}", orderNumber);
+                log.warn("[정산] 오류 시뮬레이션: [주문 생성] 이벤트만 발행 (결제 누락) - 주문번호: {}, 시각: {}", orderNumber, eventDateTime);
                 kafkaProducerService.publishOrderCreated(orderEvent);
             } else {
-                log.warn("[정산] 오류 시뮬레이션: [결제 확정] 이벤트만 발행 (주문 누락) - 주문번호: {}", orderNumber);
+                log.warn("[정산] 오류 시뮬레이션: [결제 확정] 이벤트만 발행 (주문 누락) - 주문번호: {}, 시각: {}", orderNumber, eventDateTime);
                 kafkaProducerService.publishPaymentConfirmed(paymentEvent);
             }
         } else {
             // 정상 발생 시: 순차 발행
             kafkaProducerService.publishOrderCreated(orderEvent);
             kafkaProducerService.publishPaymentConfirmed(paymentEvent);
-            log.info("[정산] 정상 이벤트 세트 발행 완료 - 주문번호: {}", orderNumber);
+            log.info("[정산] 정상 이벤트 세트 발행 완료 - 주문번호: {}, 시각: {}", orderNumber, eventDateTime);
         }
     }
 
@@ -135,7 +149,16 @@ public class SettlementService {
         settings.setIntervalSeconds(request.getInterval());
         settings.setEventsPerBatch(request.getPerBatch());
         settings.setErrorProbability(request.getErrorProb());
-        log.info("[정산] 설정 업데이트: {}개, {}초 간격, 배치당 {}개, 오류확률 {}%", 
+        
+        if (request.getStartDate() != null && !request.getStartDate().isEmpty()) {
+            settings.setStartDate(LocalDate.parse(request.getStartDate()));
+        }
+        if (request.getEndDate() != null && !request.getEndDate().isEmpty()) {
+            settings.setEndDate(LocalDate.parse(request.getEndDate()));
+        }
+        
+        log.info("[정산] 설정 업데이트: {} ~ {} 기간, {}개, {}초 간격, 배치당 {}개, 오류확률 {}%", 
+            settings.getStartDate(), settings.getEndDate(),
             request.getCount(), request.getInterval(), request.getPerBatch(), request.getErrorProb() * 100);
     }
 }

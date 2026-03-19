@@ -26,8 +26,8 @@ public class OrderCreatedEvent {
 	private List<OrderItemSnapshot> orderItems;
 	private DeliverySnapshot delivery;
 
-	@JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS")
-	@Schema(description = "주문 일시", example = "2026-01-23T16:58:34.035882", type = "string")
+	@JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
+	@Schema(description = "주문 일시", example = "2026-01-23T16:58:34", type = "string")
 	private LocalDateTime orderedAt;
 
 	@Getter

@@ -56,6 +56,17 @@
         <!-- 설정 폼: 대기 중일 때만 표시 -->
         <div id="settingsArea" th:style="${settings.running} ? 'display:none' : 'display:block'" class="fade-in">
             <form action="/settlement/update-settings" method="post" id="settingsForm">
+                <div class="grid-3" style="grid-template-columns: 1fr 1fr; margin-bottom: 20px;">
+                    <div class="form-group">
+                        <label for="startDate">정산 대상 시작일</label>
+                        <input type="date" id="startDate" name="startDate" th:value="${settings.startDate}" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="endDate">정산 대상 종료일</label>
+                        <input type="date" id="endDate" name="endDate" th:value="${settings.endDate}" required>
+                    </div>
+                </div>
+
                 <div class="grid-3">
                     <div class="form-group">
                         <label for="count">전체 발행 세트 수</label>

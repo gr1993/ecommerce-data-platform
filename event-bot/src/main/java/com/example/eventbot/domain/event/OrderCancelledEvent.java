@@ -22,7 +22,7 @@ public class OrderCancelledEvent {
 	private Long userId;
 	private List<CancelledOrderItem> cancelledItems;
 
-	@JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS")
+	@JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
 	private LocalDateTime cancelledAt;
 
 	/**
