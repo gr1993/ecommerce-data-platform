@@ -80,6 +80,16 @@ services:
     networks:
       - ecommerce-net
 
+  postgres:
+    image: postgres
+    container_name: postgres
+    environment:
+      POSTGRES_PASSWORD: 123123
+    ports:
+      - "5432:5432"
+    networks:
+      - ecommerce-net
+
 
 networks:
   ecommerce-net:
