@@ -36,3 +36,11 @@ event-bot에서는 일부러 결함이 포함된 이벤트를 발생시키도록
 얻을 수 있다. 또한, 일정 기간(예: 3개월)이 지난 Raw 데이터는 S3와 같은 저장소로 아카이빙하거나 삭제할 수  
 있는 TTL(Retention) 전략을 설정할 수 있다.  
 다만, 이번 사이드 프로젝트 수행 기간이 길지 않기 때문에 아카이빙이나 삭제 전략은 생략할 예정이다.  
+
+
+### 백엔드 기술
+* Spring Boot 3.5.11 (JDK 17)
+* spring-boot-starter-web
+* spring-boot-starter-data-jpa
+* PostgreSQL
+* flyway-database-postgresql : DB 마이그레이션 도구
