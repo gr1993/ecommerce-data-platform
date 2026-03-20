@@ -1,6 +1,8 @@
 package com.example.settlementservice.domain.entity;
 
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -13,6 +15,8 @@ import java.util.Map;
 @Entity
 @Table(name = "raw_orders")
 @Getter
+@Builder
+@AllArgsConstructor
 @NoArgsConstructor
 @IdClass(RawOrderId.class)
 public class RawOrder {

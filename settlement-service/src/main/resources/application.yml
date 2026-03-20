@@ -11,3 +11,20 @@ spring:
     baseline-on-migrate: true
     baseline-version: 0
     locations: classpath:db/migration
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9091,localhost:9092,localhost:9094}
+    consumer:
+      group-id: settlement-service-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      enable-auto-commit: false
+      max-poll-records: 10
+      properties:
+        spring.json.trusted.packages: "com.example.*"
+        spring.json.type.mapping: >
+          orderCreatedEvent:com.example.settlementservice.domain.event.OrderCreatedEvent,
+          paymentConfirmedEvent:com.example.settlementservice.domain.event.PaymentConfirmedEvent,
+          orderCancelledEvent:com.example.settlementservice.domain.event.OrderCancelledEvent,
+          paymentCancelledEvent:com.example.settlementservice.domain.event.PaymentCancelledEvent

@@ -1,6 +1,8 @@
 package com.example.settlementservice.domain.entity;
 
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -9,6 +11,8 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "raw_payments")
 @Getter
+@Builder
+@AllArgsConstructor
 @NoArgsConstructor
 @IdClass(RawPaymentId.class)
 public class RawPayment {

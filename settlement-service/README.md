@@ -51,3 +51,4 @@ event-bot에서는 일부러 결함이 포함된 이벤트를 발생시키도록
 * spring-boot-starter-data-jpa
 * PostgreSQL
 * flyway-database-postgresql : DB 마이그레이션 도구
+* Spring Kafka
