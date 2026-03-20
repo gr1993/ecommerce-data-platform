@@ -26,7 +26,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Slf4j
 @Component
@@ -60,7 +62,7 @@ public class SettlementEventConsumer {
                 .orderStatus(event.getOrderStatus())
                 .totalPaymentAmount(event.getTotalPaymentAmount())
                 .orderedAt(event.getOrderedAt())
-                .orderItems(new HashMap<>(Map.of("items", event.getOrderItems()))) // JSONB 매핑
+                .orderItems(new HashMap<>(Map.of("items", Optional.ofNullable(event.getOrderItems()).orElse(List.of())))) // null 체크
                 .delivery(event.getDelivery())
                 .build();
         
@@ -98,6 +100,13 @@ public class SettlementEventConsumer {
     /**
      * 주문 취소 이벤트 소비
      */
+    @RetryableTopic(
+            attempts = "3",
+            backoff = @Backoff(delay = 2000, multiplier = 2.0),
+            topicSuffixingStrategy = TopicSuffixingStrategy.SUFFIX_WITH_INDEX_VALUE,
+            retryTopicSuffix = "-retry",
+            dltTopicSuffix = "-dlt"
+    )
     @KafkaListener(topics = "order-cancelled", groupId = "${spring.kafka.consumer.group-id}")
     @Transactional
     public void consumeOrderCancelled(@Payload OrderCancelledEvent event) {
@@ -109,7 +118,7 @@ public class SettlementEventConsumer {
                 .userId(event.getUserId())
                 .cancellationReason(event.getCancellationReason())
                 .cancelledAt(event.getCancelledAt())
-                .cancelledItems(new HashMap<>(Map.of("items", event.getCancelledItems())))
+                .cancelledItems(new HashMap<>(Map.of("items", Optional.ofNullable(event.getCancelledItems()).orElse(List.of())))) // null 체크
                 .build();
 
         rawOrderCancelRepository.save(entity);
@@ -118,6 +127,13 @@ public class SettlementEventConsumer {
     /**
      * 결제 취소 이벤트 소비
      */
+    @RetryableTopic(
+            attempts = "3",
+            backoff = @Backoff(delay = 2000, multiplier = 2.0),
+            topicSuffixingStrategy = TopicSuffixingStrategy.SUFFIX_WITH_INDEX_VALUE,
+            retryTopicSuffix = "-retry",
+            dltTopicSuffix = "-dlt"
+    )
     @KafkaListener(topics = "payment-cancelled", groupId = "${spring.kafka.consumer.group-id}")
     @Transactional
     public void consumePaymentCancelled(@Payload PaymentCancelledEvent event) {
