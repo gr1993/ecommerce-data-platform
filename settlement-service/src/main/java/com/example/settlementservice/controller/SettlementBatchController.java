@@ -7,6 +7,7 @@ import org.springframework.batch.core.JobParametersBuilder;
 import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
@@ -17,15 +18,16 @@ import java.time.LocalDateTime;
 public class SettlementBatchController {
 
     private final JobLauncher jobLauncher;
-    private final Job settlementJob;
+    private final Job dailySettlementJob;
 
-    @PostMapping("/run")
-    public String runSettlementJob() throws Exception {
+    @PostMapping("/daily/run")
+    public String runDailySettlementJob(@RequestParam(name = "targetDate") String targetDate) throws Exception {
         JobParameters jobParameters = new JobParametersBuilder()
+                .addString("targetDate", targetDate)
                 .addString("datetime", LocalDateTime.now().toString())
                 .toJobParameters();
         
-        jobLauncher.run(settlementJob, jobParameters);
-        return "Settlement Batch Job started.";
+        jobLauncher.run(dailySettlementJob, jobParameters);
+        return "Daily Settlement Batch Job started for date: " + targetDate;
     }
 }

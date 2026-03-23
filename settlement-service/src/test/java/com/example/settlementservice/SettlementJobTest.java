@@ -1,10 +1,7 @@
 package com.example.settlementservice;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.batch.core.ExitStatus;
-import org.springframework.batch.core.JobExecution;
-import org.springframework.batch.core.JobParameters;
-import org.springframework.batch.core.JobParametersBuilder;
+import org.springframework.batch.core.*;
 import org.springframework.batch.test.JobLauncherTestUtils;
 import org.springframework.batch.test.context.SpringBatchTest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,10 +16,13 @@ public class SettlementJobTest {
     @Autowired
     private JobLauncherTestUtils jobLauncherTestUtils;
 
+    @Autowired
+    private Job dailySettlementJob;
+
     @Test
-    public void testSettlementJob() throws Exception {
+    public void testDailySettlementJob() throws Exception {
         // Given
-        String targetDate = "2026-03-07";
+        String targetDate = "2026-03-23";
 
         /*
          * JobParameter에 targetDate만 넘기는 이유는 작업 실패 시 동일한 파라미터로 재시작하여
@@ -35,12 +35,14 @@ public class SettlementJobTest {
                 .toJobParameters();
 
         // When
+        jobLauncherTestUtils.setJob(dailySettlementJob);
         JobExecution jobExecution = jobLauncherTestUtils.launchJob(jobParameters);
 
         // Then
         System.out.println("Job Execution Status: " + jobExecution.getStatus());
         System.out.println("Job Exit Status: " + jobExecution.getExitStatus());
-        
+
         assertEquals(ExitStatus.COMPLETED.getExitCode(), jobExecution.getExitStatus().getExitCode());
     }
 }
+

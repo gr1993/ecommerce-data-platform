@@ -30,28 +30,27 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 정산 배치 작업 설정 (Settlement Batch Job Configuration)
+ * 일일 정산 배치 작업 설정 (Daily Settlement Job Configuration)
  *
- * 전체 정산 프로세스는 3단계(Step)로 구성됩니다:
+ * 전체 일일 정산 프로세스는 3단계(Step)로 구성됩니다:
  *
- * [Step 1: Sales Reconciliation (매출 대조)]
+ * [Step 1: dailySalesReconciliationStep (일일 매출 대조)]
  * 1. 목적: 정상적으로 발생한 주문과 결제 데이터를 매칭하여 매출 원장(Ledger)을 생성합니다.
  * 2. 대상: is_reconciled = false 이면서, targetDate 기준 7일 전 ~ 당일 사이의 주문 데이터.
  * 3. 7일 윈도우: 시스템 장애나 지연으로 인해 뒤늦게 도착한 과거 결제 데이터를 보완하기 위해 7일의 조회 범위를 가집니다.
  *
- * [Step 2: Cancel Reconciliation (취소 대조)]
+ * [Step 2: dailyCancelReconciliationStep (일일 취소 대조)]
  * 1. 목적: 주문 취소와 결제 취소 데이터를 매칭하여 취소 원장(Ledger)을 생성합니다.
  * 2. 대상: is_reconciled = false 이면서, targetDate 기준 7일 전 ~ 당일 사이의 주문 취소 데이터.
  *
- * [Step 3: Daily Aggregation (일별 총계정원장 집계)]
- * 1. 목적: 당일(targetDate) 발생한 모든 원장(Ledger) 데이터를 타입별로 합산하여 일별 총계정원장에 기록합니다.
+ * [Step 3: dailyAggregationStep (일별 총계정원장 집계)]
+ * 1. 목적: 당일(targetDate) 기준 7일 전부터 오늘까지의 모든 원장(Ledger) 데이터를 타입별로 재합산하여 일별 총계정원장에 기록합니다.
  * 2. 로직: 'SALES'와 'CANCEL' 각각의 총 금액과 건수를 집계하여 daily_general_ledger에 Upsert 합니다.
- * 3. 기대효과: 대량의 개별 원장을 매번 조회하지 않고, 일별 집계된 데이터를 통해 빠르게 재무 현황을 파악할 수 있습니다.
  */
 @Slf4j
 @Configuration
 @RequiredArgsConstructor
-public class SettlementBatchConfig {
+public class DailySettlementJobConfig {
 
     private final JobRepository jobRepository;
     private final PlatformTransactionManager transactionManager;
@@ -67,39 +66,39 @@ public class SettlementBatchConfig {
     private static final int CHUNK_SIZE = 100;
 
     @Bean
-    public Job settlementJob() {
-        return new JobBuilder("settlementJob", jobRepository)
-                .start(salesReconciliationStep())
-                .next(cancelReconciliationStep())
+    public Job dailySettlementJob() {
+        return new JobBuilder("dailySettlementJob", jobRepository)
+                .start(dailySalesReconciliationStep())
+                .next(dailyCancelReconciliationStep())
                 .next(dailyAggregationStep())
                 .build();
     }
 
-    // --- Step 1: Sales Reconciliation ---
+    // --- Step 1: Daily Sales Reconciliation ---
 
     @Bean
-    public Step salesReconciliationStep() {
-        return new StepBuilder("salesReconciliationStep", jobRepository)
+    public Step dailySalesReconciliationStep() {
+        return new StepBuilder("dailySalesReconciliationStep", jobRepository)
                 .<RawOrder, Ledger>chunk(CHUNK_SIZE, transactionManager)
-                .reader(salesReader(null))
-                .processor(salesProcessor())
-                .writer(salesWriter())
+                .reader(dailySalesReader(null))
+                .processor(dailySalesProcessor())
+                .writer(dailySalesWriter())
                 .build();
     }
 
     @Bean
     @StepScope
-    public JpaPagingItemReader<RawOrder> salesReader(
+    public JpaPagingItemReader<RawOrder> dailySalesReader(
             @Value("#{jobParameters['targetDate']}") String targetDate) {
         
         LocalDate date = LocalDate.parse(targetDate);
         LocalDateTime windowStart = date.minusDays(7).atStartOfDay();
         LocalDateTime end = date.atTime(LocalTime.MAX);
 
-        log.info("[SalesReader] Target Date: {}, Window: {} ~ {}", targetDate, windowStart, end);
+        log.info("[DailySalesReader] Target Date: {}, Window: {} ~ {}", targetDate, windowStart, end);
 
         return new JpaPagingItemReaderBuilder<RawOrder>()
-                .name("salesReader")
+                .name("dailySalesReader")
                 .entityManagerFactory(entityManagerFactory)
                 .queryString("SELECT o FROM RawOrder o WHERE o.isReconciled = false AND o.orderedAt BETWEEN :start AND :end")
                 .parameterValues(Map.of("start", windowStart, "end", end))
@@ -108,7 +107,7 @@ public class SettlementBatchConfig {
     }
 
     @Bean
-    public ItemProcessor<RawOrder, Ledger> salesProcessor() {
+    public ItemProcessor<RawOrder, Ledger> dailySalesProcessor() {
         return order -> {
             List<RawPayment> payments = rawPaymentRepository.findByOrderNumber(order.getOrderNumber());
             
@@ -136,7 +135,6 @@ public class SettlementBatchConfig {
             payment.setReconciliationStatus(ReconciliationStatus.SUCCESS);
             rawPaymentRepository.save(payment);
 
-            // [Upsert 로직] 기존 원장이 있는지 조회
             Ledger ledger = ledgerRepository
                     .findByOrderNumberAndLedgerType(order.getOrderNumber(), "SALES")
                     .orElseGet(() -> Ledger.builder()
@@ -152,7 +150,7 @@ public class SettlementBatchConfig {
     }
 
     @Bean
-    public ItemWriter<Ledger> salesWriter() {
+    public ItemWriter<Ledger> dailySalesWriter() {
         return items -> {
             for (Ledger ledger : items) {
                 ledgerRepository.save(ledger);
@@ -160,31 +158,31 @@ public class SettlementBatchConfig {
         };
     }
 
-    // --- Step 2: Cancel Reconciliation ---
+    // --- Step 2: Daily Cancel Reconciliation ---
 
     @Bean
-    public Step cancelReconciliationStep() {
-        return new StepBuilder("cancelReconciliationStep", jobRepository)
+    public Step dailyCancelReconciliationStep() {
+        return new StepBuilder("dailyCancelReconciliationStep", jobRepository)
                 .<RawOrderCancel, Ledger>chunk(CHUNK_SIZE, transactionManager)
-                .reader(cancelReader(null))
-                .processor(cancelProcessor())
-                .writer(cancelWriter())
+                .reader(dailyCancelReader(null))
+                .processor(dailyCancelProcessor())
+                .writer(dailyCancelWriter())
                 .build();
     }
 
     @Bean
     @StepScope
-    public JpaPagingItemReader<RawOrderCancel> cancelReader(
+    public JpaPagingItemReader<RawOrderCancel> dailyCancelReader(
             @Value("#{jobParameters['targetDate']}") String targetDate) {
         
         LocalDate date = LocalDate.parse(targetDate);
         LocalDateTime windowStart = date.minusDays(7).atStartOfDay();
         LocalDateTime end = date.atTime(LocalTime.MAX);
 
-        log.info("[CancelReader] Target Date: {}, Window: {} ~ {}", targetDate, windowStart, end);
+        log.info("[DailyCancelReader] Target Date: {}, Window: {} ~ {}", targetDate, windowStart, end);
 
         return new JpaPagingItemReaderBuilder<RawOrderCancel>()
-                .name("cancelReader")
+                .name("dailyCancelReader")
                 .entityManagerFactory(entityManagerFactory)
                 .queryString("SELECT oc FROM RawOrderCancel oc WHERE oc.isReconciled = false AND oc.cancelledAt BETWEEN :start AND :end")
                 .parameterValues(Map.of("start", windowStart, "end", end))
@@ -193,7 +191,7 @@ public class SettlementBatchConfig {
     }
 
     @Bean
-    public ItemProcessor<RawOrderCancel, Ledger> cancelProcessor() {
+    public ItemProcessor<RawOrderCancel, Ledger> dailyCancelProcessor() {
         return orderCancel -> {
             List<RawPaymentCancel> paymentCancels = rawPaymentCancelRepository.findByOrderNumber(orderCancel.getOrderNumber());
 
@@ -211,7 +209,6 @@ public class SettlementBatchConfig {
             paymentCancel.setReconciliationStatus(ReconciliationStatus.SUCCESS);
             rawPaymentCancelRepository.save(paymentCancel);
 
-            // [Upsert 로직] 기존 원장이 있는지 조회
             Ledger ledger = ledgerRepository
                     .findByOrderNumberAndLedgerType(orderCancel.getOrderNumber(), "CANCEL")
                     .orElseGet(() -> Ledger.builder()
@@ -227,7 +224,7 @@ public class SettlementBatchConfig {
     }
 
     @Bean
-    public ItemWriter<Ledger> cancelWriter() {
+    public ItemWriter<Ledger> dailyCancelWriter() {
         return items -> {
             for (Ledger ledger : items) {
                 ledgerRepository.save(ledger);
@@ -235,7 +232,7 @@ public class SettlementBatchConfig {
         };
     }
 
-    // --- Step 3: Daily Aggregation (원장 집계) ---
+    // --- Step 3: Daily Aggregation ---
 
     @Bean
     public Step dailyAggregationStep() {
@@ -249,19 +246,15 @@ public class SettlementBatchConfig {
     public Tasklet dailyAggregationTasklet(@Value("#{jobParameters['targetDate']}") String targetDate) {
         return (contribution, chunkContext) -> {
             LocalDate endDate = LocalDate.parse(targetDate);
-            // [7일 윈도우 반영] 지연 데이터 처리를 위해 7일 전부터 오늘까지의 모든 합계를 재집계
             LocalDate startDate = endDate.minusDays(7);
 
-            log.info("[DailyAggregation] {} ~ {} 기간 원장 집계 갱신 시작", startDate, endDate);
+            log.info("[DailyAggregation] {} ~ {} 기간 집계 갱신 시작", startDate, endDate);
 
             for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
                 LocalDateTime start = date.atStartOfDay();
                 LocalDateTime end = date.atTime(LocalTime.MAX);
 
-                // 각 날짜별 SALES 집계 및 Upsert
                 aggregateAndSave(date, "SALES", start, end);
-                
-                // 각 날짜별 CANCEL 집계 및 Upsert
                 aggregateAndSave(date, "CANCEL", start, end);
             }
 
@@ -270,25 +263,20 @@ public class SettlementBatchConfig {
     }
 
     private void aggregateAndSave(LocalDate date, String type, LocalDateTime start, LocalDateTime end) {
-        // 1. Ledger 테이블에서 해당 날짜와 타입의 데이터 집계
         Object resultObj = ledgerRepository.aggregateByTypeAndDate(type, start, end);
         Object[] result = (Object[]) resultObj;
 
         BigDecimal totalAmount = (result[0] != null) ? (BigDecimal) result[0] : BigDecimal.ZERO;
         int totalCount = (result[1] != null) ? ((Long) result[1]).intValue() : 0;
 
-        log.info("[DailyAggregation] {} 결과 - 타입: {}, 금액: {}, 건수: {}", date, type, totalAmount, totalCount);
-
-        // 2. 이미 해당 날짜/타입의 레코드가 있는지 확인 (Upsert)
         DailyGeneralLedger dailyLedger = dailyGeneralLedgerRepository
                 .findBySettlementDateAndLedgerType(date, type)
                 .orElseGet(() -> DailyGeneralLedger.builder()
                         .settlementDate(date)
                         .ledgerType(type)
-                        .description("정기 배치 집계")
+                        .description("일일 정산 배치 집계")
                         .build());
 
-        // 3. 최신 집계 정보로 업데이트 후 저장
         dailyLedger.setTotalAmount(totalAmount);
         dailyLedger.setTotalCount(totalCount);
 
