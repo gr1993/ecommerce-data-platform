@@ -7,11 +7,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
+import org.springframework.batch.core.configuration.annotation.JobScope;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.job.builder.JobBuilder;
+import org.springframework.batch.core.partition.support.Partitioner;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.core.step.tasklet.Tasklet;
+import org.springframework.batch.item.ExecutionContext;
 import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.database.JpaPagingItemReader;
@@ -20,32 +23,30 @@ import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.task.TaskExecutor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
  * 일일 정산 배치 작업 설정 (Daily Settlement Job Configuration)
  *
- * 전체 일일 정산 프로세스는 3단계(Step)로 구성됩니다:
+ * [성능 최적화] 일자별 파티셔닝(Date Partitioning) 적용
+ * - 7일 윈도우 전략에 따라 (targetDate - 7일 ~ targetDate) 범위의 데이터를 처리합니다.
+ * - 각 날짜별로 별도의 파티션을 생성하여 8개의 스레드가 병렬로 대조 및 집계를 수행합니다.
+ * - 특히 집계(Step 3) 단계에서 모든 날짜의 원장을 동시에 합산하므로 전체 처리 시간이 대폭 단축됩니다.
  *
- * [Step 1: dailySalesReconciliationStep (일일 매출 대조)]
- * 1. 목적: 정상적으로 발생한 주문과 결제 데이터를 매칭하여 매출 원장(Ledger)을 생성합니다.
- * 2. 대상: is_reconciled = false 이면서, targetDate 기준 7일 전 ~ 당일 사이의 주문 데이터.
- * 3. 7일 윈도우: 시스템 장애나 지연으로 인해 뒤늦게 도착한 과거 결제 데이터를 보완하기 위해 7일의 조회 범위를 가집니다.
- *
- * [Step 2: dailyCancelReconciliationStep (일일 취소 대조)]
- * 1. 목적: 주문 취소와 결제 취소 데이터를 매칭하여 취소 원장(Ledger)을 생성합니다.
- * 2. 대상: is_reconciled = false 이면서, targetDate 기준 7일 전 ~ 당일 사이의 주문 취소 데이터.
- *
- * [Step 3: dailyAggregationStep (일별 총계정원장 집계)]
- * 1. 목적: 당일(targetDate) 기준 7일 전부터 오늘까지의 모든 원장(Ledger) 데이터를 타입별로 재합산하여 일별 총계정원장에 기록합니다.
- * 2. 로직: 'SALES'와 'CANCEL' 각각의 총 금액과 건수를 집계하여 daily_general_ledger에 Upsert 합니다.
+ * 전체 프로세스 (3단계):
+ * 1. dailySalesReconciliationStep (Master -> Worker): 일일 매출 대조 병렬 처리
+ * 2. dailyCancelReconciliationStep (Master -> Worker): 일일 취소 대조 병렬 처리
+ * 3. dailyAggregationStep (Master -> Worker): 일별 총계정원장 집계 병렬 처리
  */
 @Slf4j
 @Configuration
@@ -64,21 +65,61 @@ public class DailySettlementJobConfig {
     private final DailyGeneralLedgerRepository dailyGeneralLedgerRepository;
 
     private static final int CHUNK_SIZE = 100;
+    private static final int GRID_SIZE = 8; // 오늘 + 과거 7일
 
     @Bean
     public Job dailySettlementJob() {
         return new JobBuilder("dailySettlementJob", jobRepository)
-                .start(dailySalesReconciliationStep())
-                .next(dailyCancelReconciliationStep())
-                .next(dailyAggregationStep())
+                .start(dailySalesMasterStep())
+                .next(dailyCancelMasterStep())
+                .next(dailyAggregationMasterStep())
                 .build();
     }
 
-    // --- Step 1: Daily Sales Reconciliation ---
+    // --- 공통 설정 (Partitioner & TaskExecutor) ---
 
     @Bean
-    public Step dailySalesReconciliationStep() {
-        return new StepBuilder("dailySalesReconciliationStep", jobRepository)
+    @JobScope
+    public Partitioner settlementPartitioner(@Value("#{jobParameters['targetDate']}") String targetDate) {
+        return gridSize -> {
+            LocalDate end = LocalDate.parse(targetDate);
+            LocalDate start = end.minusDays(7);
+            Map<String, ExecutionContext> partitions = new HashMap<>();
+            
+            for (LocalDate date = start; !date.isAfter(end); date = date.plusDays(1)) {
+                ExecutionContext context = new ExecutionContext();
+                context.putString("partitionDate", date.toString());
+                partitions.put("partition-" + date, context);
+            }
+            return partitions;
+        };
+    }
+
+    @Bean
+    public TaskExecutor settlementTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(GRID_SIZE);
+        executor.setMaxPoolSize(GRID_SIZE * 2);
+        executor.setThreadNamePrefix("settle-worker-");
+        executor.initialize();
+        return executor;
+    }
+
+    // --- Step 1: Daily Sales Reconciliation (Partitioned) ---
+
+    @Bean
+    public Step dailySalesMasterStep() {
+        return new StepBuilder("dailySalesMasterStep", jobRepository)
+                .partitioner("dailySalesWorkerStep", settlementPartitioner(null))
+                .step(dailySalesWorkerStep())
+                .taskExecutor(settlementTaskExecutor())
+                .gridSize(GRID_SIZE)
+                .build();
+    }
+
+    @Bean
+    public Step dailySalesWorkerStep() {
+        return new StepBuilder("dailySalesWorkerStep", jobRepository)
                 .<RawOrder, Ledger>chunk(CHUNK_SIZE, transactionManager)
                 .reader(dailySalesReader(null))
                 .processor(dailySalesProcessor())
@@ -89,24 +130,25 @@ public class DailySettlementJobConfig {
     @Bean
     @StepScope
     public JpaPagingItemReader<RawOrder> dailySalesReader(
-            @Value("#{jobParameters['targetDate']}") String targetDate) {
+            @Value("#{stepExecutionContext['partitionDate']}") String partitionDate) {
         
-        LocalDate date = LocalDate.parse(targetDate);
-        LocalDateTime windowStart = date.minusDays(7).atStartOfDay();
+        LocalDate date = LocalDate.parse(partitionDate);
+        LocalDateTime start = date.atStartOfDay();
         LocalDateTime end = date.atTime(LocalTime.MAX);
 
-        log.info("[DailySalesReader] Target Date: {}, Window: {} ~ {}", targetDate, windowStart, end);
+        log.info("[DailySalesReader] Partition Date: {}", partitionDate);
 
         return new JpaPagingItemReaderBuilder<RawOrder>()
                 .name("dailySalesReader")
                 .entityManagerFactory(entityManagerFactory)
                 .queryString("SELECT o FROM RawOrder o WHERE o.isReconciled = false AND o.orderedAt BETWEEN :start AND :end")
-                .parameterValues(Map.of("start", windowStart, "end", end))
+                .parameterValues(Map.of("start", start, "end", end))
                 .pageSize(CHUNK_SIZE)
                 .build();
     }
 
     @Bean
+    @StepScope
     public ItemProcessor<RawOrder, Ledger> dailySalesProcessor() {
         return order -> {
             List<RawPayment> payments = rawPaymentRepository.findByOrderNumber(order.getOrderNumber());
@@ -134,6 +176,7 @@ public class DailySettlementJobConfig {
             payment.setReconciled(true);
             payment.setReconciliationStatus(ReconciliationStatus.SUCCESS);
             rawPaymentRepository.save(payment);
+            rawOrderRepository.save(order);
 
             Ledger ledger = ledgerRepository
                     .findByOrderNumberAndLedgerType(order.getOrderNumber(), "SALES")
@@ -158,11 +201,21 @@ public class DailySettlementJobConfig {
         };
     }
 
-    // --- Step 2: Daily Cancel Reconciliation ---
+    // --- Step 2: Daily Cancel Reconciliation (Partitioned) ---
 
     @Bean
-    public Step dailyCancelReconciliationStep() {
-        return new StepBuilder("dailyCancelReconciliationStep", jobRepository)
+    public Step dailyCancelMasterStep() {
+        return new StepBuilder("dailyCancelMasterStep", jobRepository)
+                .partitioner("dailyCancelWorkerStep", settlementPartitioner(null))
+                .step(dailyCancelWorkerStep())
+                .taskExecutor(settlementTaskExecutor())
+                .gridSize(GRID_SIZE)
+                .build();
+    }
+
+    @Bean
+    public Step dailyCancelWorkerStep() {
+        return new StepBuilder("dailyCancelWorkerStep", jobRepository)
                 .<RawOrderCancel, Ledger>chunk(CHUNK_SIZE, transactionManager)
                 .reader(dailyCancelReader(null))
                 .processor(dailyCancelProcessor())
@@ -173,24 +226,25 @@ public class DailySettlementJobConfig {
     @Bean
     @StepScope
     public JpaPagingItemReader<RawOrderCancel> dailyCancelReader(
-            @Value("#{jobParameters['targetDate']}") String targetDate) {
+            @Value("#{stepExecutionContext['partitionDate']}") String partitionDate) {
         
-        LocalDate date = LocalDate.parse(targetDate);
-        LocalDateTime windowStart = date.minusDays(7).atStartOfDay();
+        LocalDate date = LocalDate.parse(partitionDate);
+        LocalDateTime start = date.atStartOfDay();
         LocalDateTime end = date.atTime(LocalTime.MAX);
 
-        log.info("[DailyCancelReader] Target Date: {}, Window: {} ~ {}", targetDate, windowStart, end);
+        log.info("[DailyCancelReader] Partition Date: {}", partitionDate);
 
         return new JpaPagingItemReaderBuilder<RawOrderCancel>()
                 .name("dailyCancelReader")
                 .entityManagerFactory(entityManagerFactory)
                 .queryString("SELECT oc FROM RawOrderCancel oc WHERE oc.isReconciled = false AND oc.cancelledAt BETWEEN :start AND :end")
-                .parameterValues(Map.of("start", windowStart, "end", end))
+                .parameterValues(Map.of("start", start, "end", end))
                 .pageSize(CHUNK_SIZE)
                 .build();
     }
 
     @Bean
+    @StepScope
     public ItemProcessor<RawOrderCancel, Ledger> dailyCancelProcessor() {
         return orderCancel -> {
             List<RawPaymentCancel> paymentCancels = rawPaymentCancelRepository.findByOrderNumber(orderCancel.getOrderNumber());
@@ -208,6 +262,7 @@ public class DailySettlementJobConfig {
             paymentCancel.setReconciled(true);
             paymentCancel.setReconciliationStatus(ReconciliationStatus.SUCCESS);
             rawPaymentCancelRepository.save(paymentCancel);
+            rawOrderCancelRepository.save(orderCancel);
 
             Ledger ledger = ledgerRepository
                     .findByOrderNumberAndLedgerType(orderCancel.getOrderNumber(), "CANCEL")
@@ -232,31 +287,40 @@ public class DailySettlementJobConfig {
         };
     }
 
-    // --- Step 3: Daily Aggregation ---
+    // --- Step 3: Daily Aggregation (Partitioned) ---
 
     @Bean
-    public Step dailyAggregationStep() {
-        return new StepBuilder("dailyAggregationStep", jobRepository)
+    public Step dailyAggregationMasterStep() {
+        return new StepBuilder("dailyAggregationMasterStep", jobRepository)
+                .partitioner("dailyAggregationWorkerStep", settlementPartitioner(null))
+                .step(dailyAggregationWorkerStep())
+                .taskExecutor(settlementTaskExecutor())
+                .gridSize(GRID_SIZE)
+                .build();
+    }
+
+    @Bean
+    public Step dailyAggregationWorkerStep() {
+        return new StepBuilder("dailyAggregationWorkerStep", jobRepository)
                 .tasklet(dailyAggregationTasklet(null), transactionManager)
                 .build();
     }
 
     @Bean
     @StepScope
-    public Tasklet dailyAggregationTasklet(@Value("#{jobParameters['targetDate']}") String targetDate) {
+    public Tasklet dailyAggregationTasklet(@Value("#{stepExecutionContext['partitionDate']}") String partitionDate) {
         return (contribution, chunkContext) -> {
-            LocalDate endDate = LocalDate.parse(targetDate);
-            LocalDate startDate = endDate.minusDays(7);
+            LocalDate date = LocalDate.parse(partitionDate);
+            LocalDateTime start = date.atStartOfDay();
+            LocalDateTime end = date.atTime(LocalTime.MAX);
 
-            log.info("[DailyAggregation] {} ~ {} 기간 집계 갱신 시작", startDate, endDate);
+            log.info("[DailyAggregation] 파티션 날짜 집계 시작: {}", partitionDate);
 
-            for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
-                LocalDateTime start = date.atStartOfDay();
-                LocalDateTime end = date.atTime(LocalTime.MAX);
-
-                aggregateAndSave(date, "SALES", start, end);
-                aggregateAndSave(date, "CANCEL", start, end);
-            }
+            // 각 날짜별 SALES 집계 및 Upsert
+            aggregateAndSave(date, "SALES", start, end);
+            
+            // 각 날짜별 CANCEL 집계 및 Upsert
+            aggregateAndSave(date, "CANCEL", start, end);
 
             return RepeatStatus.FINISHED;
         };
@@ -274,7 +338,7 @@ public class DailySettlementJobConfig {
                 .orElseGet(() -> DailyGeneralLedger.builder()
                         .settlementDate(date)
                         .ledgerType(type)
-                        .description("일일 정산 배치 집계")
+                        .description("일일 정산 배치 집계 (병렬)")
                         .build());
 
         dailyLedger.setTotalAmount(totalAmount);
