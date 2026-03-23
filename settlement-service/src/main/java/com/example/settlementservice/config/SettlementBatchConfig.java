@@ -136,12 +136,18 @@ public class SettlementBatchConfig {
             payment.setReconciliationStatus(ReconciliationStatus.SUCCESS);
             rawPaymentRepository.save(payment);
 
-            return Ledger.builder()
-                    .orderNumber(order.getOrderNumber())
-                    .amount(order.getTotalPaymentAmount())
-                    .ledgerType("SALES")
-                    .eventAt(order.getOrderedAt())
-                    .build();
+            // [Upsert 로직] 기존 원장이 있는지 조회
+            Ledger ledger = ledgerRepository
+                    .findByOrderNumberAndLedgerType(order.getOrderNumber(), "SALES")
+                    .orElseGet(() -> Ledger.builder()
+                            .orderNumber(order.getOrderNumber())
+                            .ledgerType("SALES")
+                            .build());
+
+            ledger.setAmount(order.getTotalPaymentAmount());
+            ledger.setEventAt(order.getOrderedAt());
+
+            return ledger;
         };
     }
 
@@ -205,12 +211,18 @@ public class SettlementBatchConfig {
             paymentCancel.setReconciliationStatus(ReconciliationStatus.SUCCESS);
             rawPaymentCancelRepository.save(paymentCancel);
 
-            return Ledger.builder()
-                    .orderNumber(orderCancel.getOrderNumber())
-                    .amount(BigDecimal.valueOf(paymentCancel.getAmount()).negate())
-                    .ledgerType("CANCEL")
-                    .eventAt(orderCancel.getCancelledAt())
-                    .build();
+            // [Upsert 로직] 기존 원장이 있는지 조회
+            Ledger ledger = ledgerRepository
+                    .findByOrderNumberAndLedgerType(orderCancel.getOrderNumber(), "CANCEL")
+                    .orElseGet(() -> Ledger.builder()
+                            .orderNumber(orderCancel.getOrderNumber())
+                            .ledgerType("CANCEL")
+                            .build());
+
+            ledger.setAmount(BigDecimal.valueOf(paymentCancel.getAmount()).negate());
+            ledger.setEventAt(orderCancel.getCancelledAt());
+
+            return ledger;
         };
     }
 
@@ -236,17 +248,22 @@ public class SettlementBatchConfig {
     @StepScope
     public Tasklet dailyAggregationTasklet(@Value("#{jobParameters['targetDate']}") String targetDate) {
         return (contribution, chunkContext) -> {
-            LocalDate date = LocalDate.parse(targetDate);
-            LocalDateTime start = date.atStartOfDay();
-            LocalDateTime end = date.atTime(LocalTime.MAX);
+            LocalDate endDate = LocalDate.parse(targetDate);
+            // [7일 윈도우 반영] 지연 데이터 처리를 위해 7일 전부터 오늘까지의 모든 합계를 재집계
+            LocalDate startDate = endDate.minusDays(7);
 
-            log.info("[DailyAggregation] {} 날짜 원장 집계 시작", targetDate);
+            log.info("[DailyAggregation] {} ~ {} 기간 원장 집계 갱신 시작", startDate, endDate);
 
-            // SALES 집계
-            aggregateAndSave(date, "SALES", start, end);
-            
-            // CANCEL 집계
-            aggregateAndSave(date, "CANCEL", start, end);
+            for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
+                LocalDateTime start = date.atStartOfDay();
+                LocalDateTime end = date.atTime(LocalTime.MAX);
+
+                // 각 날짜별 SALES 집계 및 Upsert
+                aggregateAndSave(date, "SALES", start, end);
+                
+                // 각 날짜별 CANCEL 집계 및 Upsert
+                aggregateAndSave(date, "CANCEL", start, end);
+            }
 
             return RepeatStatus.FINISHED;
         };

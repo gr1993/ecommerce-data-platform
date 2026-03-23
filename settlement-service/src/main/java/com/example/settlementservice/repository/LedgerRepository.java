@@ -7,9 +7,15 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 @Repository
 public interface LedgerRepository extends JpaRepository<Ledger, Long> {
+
+    /**
+     * 주문 번호와 타입으로 원장 조회 (Upsert 용)
+     */
+    Optional<Ledger> findByOrderNumberAndLedgerType(String orderNumber, String ledgerType);
 
     /**
      * 특정 타입과 기간에 대한 합계 금액 및 건수 집계
