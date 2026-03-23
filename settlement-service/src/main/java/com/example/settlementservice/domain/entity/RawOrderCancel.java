@@ -1,10 +1,7 @@
 package com.example.settlementservice.domain.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -14,6 +11,7 @@ import java.util.Map;
 @Entity
 @Table(name = "raw_order_cancels")
 @Getter
+@Setter
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
@@ -31,7 +29,7 @@ public class RawOrderCancel {
     @Column(name = "order_id")
     private Long orderId;
 
-    @Column(name = "userid")
+    @Column(name = "userId")
     private Long userId;
 
     @Column(name = "cancellation_reason")
@@ -40,6 +38,14 @@ public class RawOrderCancel {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "cancelled_items", columnDefinition = "jsonb")
     private Map<String, Object> cancelledItems;
+
+    @Column(name = "is_reconciled")
+    private boolean isReconciled;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reconciliation_status")
+    private ReconciliationStatus reconciliationStatus = ReconciliationStatus.PENDING;
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;

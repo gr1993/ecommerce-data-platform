@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.Setter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -15,6 +16,7 @@ import java.util.Map;
 @Entity
 @Table(name = "raw_orders")
 @Getter
+@Setter
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
@@ -48,6 +50,14 @@ public class RawOrder {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "delivery", columnDefinition = "jsonb")
     private Map<String, Object> delivery;
+
+    @Column(name = "is_reconciled")
+    private boolean isReconciled;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reconciliation_status")
+    private ReconciliationStatus reconciliationStatus = ReconciliationStatus.PENDING;
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;

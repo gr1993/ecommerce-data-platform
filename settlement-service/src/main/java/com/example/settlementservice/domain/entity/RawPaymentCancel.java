@@ -1,16 +1,14 @@
 package com.example.settlementservice.domain.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "raw_payment_cancels")
 @Getter
+@Setter
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
@@ -33,6 +31,14 @@ public class RawPaymentCancel {
 
     @Column(name = "cancel_reason")
     private String cancelReason;
+
+    @Column(name = "is_reconciled")
+    private boolean isReconciled;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reconciliation_status")
+    private ReconciliationStatus reconciliationStatus = ReconciliationStatus.PENDING;
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
