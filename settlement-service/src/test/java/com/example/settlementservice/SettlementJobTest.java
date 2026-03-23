@@ -5,6 +5,7 @@ import org.springframework.batch.core.*;
 import org.springframework.batch.test.JobLauncherTestUtils;
 import org.springframework.batch.test.context.SpringBatchTest;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -17,7 +18,12 @@ public class SettlementJobTest {
     private JobLauncherTestUtils jobLauncherTestUtils;
 
     @Autowired
+    @Qualifier("dailySettlementJob")
     private Job dailySettlementJob;
+
+    @Autowired
+    @Qualifier("weeklySettlementJob")
+    private Job weeklySettlementJob;
 
     @Test
     public void testDailySettlementJob() throws Exception {
@@ -39,10 +45,28 @@ public class SettlementJobTest {
         JobExecution jobExecution = jobLauncherTestUtils.launchJob(jobParameters);
 
         // Then
-        System.out.println("Job Execution Status: " + jobExecution.getStatus());
-        System.out.println("Job Exit Status: " + jobExecution.getExitStatus());
+        System.out.println("Daily Job Execution Status: " + jobExecution.getStatus());
+        System.out.println("Daily Job Exit Status: " + jobExecution.getExitStatus());
+
+        assertEquals(ExitStatus.COMPLETED.getExitCode(), jobExecution.getExitStatus().getExitCode());
+    }
+
+    @Test
+    public void testWeeklySettlementJob() throws Exception {
+        // Given
+        String targetDate = "2026-03-23";
+        JobParameters jobParameters = new JobParametersBuilder()
+                .addString("targetDate", targetDate)
+                .toJobParameters();
+
+        // When
+        jobLauncherTestUtils.setJob(weeklySettlementJob);
+        JobExecution jobExecution = jobLauncherTestUtils.launchJob(jobParameters);
+
+        // Then
+        System.out.println("Weekly Job Execution Status: " + jobExecution.getStatus());
+        System.out.println("Weekly Job Exit Status: " + jobExecution.getExitStatus());
 
         assertEquals(ExitStatus.COMPLETED.getExitCode(), jobExecution.getExitStatus().getExitCode());
     }
 }
-
