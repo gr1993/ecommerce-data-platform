@@ -29,7 +29,7 @@ public class RawOrderCancel {
     @Column(name = "order_id")
     private Long orderId;
 
-    @Column(name = "userId")
+    @Column(name = "user_id")
     private Long userId;
 
     @Column(name = "cancellation_reason")

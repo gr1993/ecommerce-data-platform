@@ -1,9 +1,6 @@
 package com.example.settlementservice.consumer;
 
-import com.example.settlementservice.domain.entity.RawOrder;
-import com.example.settlementservice.domain.entity.RawOrderCancel;
-import com.example.settlementservice.domain.entity.RawPayment;
-import com.example.settlementservice.domain.entity.RawPaymentCancel;
+import com.example.settlementservice.domain.entity.*;
 import com.example.settlementservice.domain.event.OrderCancelledEvent;
 import com.example.settlementservice.domain.event.OrderCreatedEvent;
 import com.example.settlementservice.domain.event.PaymentCancelledEvent;
@@ -41,7 +38,7 @@ public class SettlementEventConsumer {
     private final RawPaymentCancelRepository rawPaymentCancelRepository;
 
     /**
-     * 주문 생성 이벤트 소비
+     * 주문 생성 이벤트 소비 (멱등성 적용)
      */
     @RetryableTopic(
             attempts = "3",
@@ -54,6 +51,12 @@ public class SettlementEventConsumer {
     @Transactional
     public void consumeOrderCreated(@Payload OrderCreatedEvent event) {
         log.info("[Consumer] OrderCreated 수신: {}", event.getOrderNumber());
+
+        RawOrderId id = new RawOrderId(event.getOrderNumber(), event.getOrderedAt());
+        if (rawOrderRepository.existsById(id)) {
+            log.warn("[Consumer] 이미 존재하는 주문 데이터입니다. Skip - OrderNumber: {}", event.getOrderNumber());
+            return;
+        }
         
         RawOrder entity = RawOrder.builder()
                 .orderId(event.getOrderId())
@@ -70,7 +73,7 @@ public class SettlementEventConsumer {
     }
 
     /**
-     * 결제 확정 이벤트 소비
+     * 결제 확정 이벤트 소비 (멱등성 적용)
      */
     @RetryableTopic(
             attempts = "3",
@@ -83,6 +86,12 @@ public class SettlementEventConsumer {
     @Transactional
     public void consumePaymentConfirmed(@Payload PaymentConfirmedEvent event) {
         log.info("[Consumer] PaymentConfirmed 수신: {}", event.getOrderNumber());
+
+        RawPaymentId id = new RawPaymentId(event.getOrderNumber(), event.getPaidAt());
+        if (rawPaymentRepository.existsById(id)) {
+            log.warn("[Consumer] 이미 존재하는 결제 데이터입니다. Skip - OrderNumber: {}", event.getOrderNumber());
+            return;
+        }
 
         RawPayment entity = RawPayment.builder()
                 .orderNumber(event.getOrderNumber())
@@ -98,7 +107,7 @@ public class SettlementEventConsumer {
     }
 
     /**
-     * 주문 취소 이벤트 소비
+     * 주문 취소 이벤트 소비 (멱등성 적용)
      */
     @RetryableTopic(
             attempts = "3",
@@ -111,6 +120,12 @@ public class SettlementEventConsumer {
     @Transactional
     public void consumeOrderCancelled(@Payload OrderCancelledEvent event) {
         log.info("[Consumer] OrderCancelled 수신: {}", event.getOrderNumber());
+
+        RawOrderCancelId id = new RawOrderCancelId(event.getOrderNumber(), event.getCancelledAt());
+        if (rawOrderCancelRepository.existsById(id)) {
+            log.warn("[Consumer] 이미 존재하는 주문 취소 데이터입니다. Skip - OrderNumber: {}", event.getOrderNumber());
+            return;
+        }
 
         RawOrderCancel entity = RawOrderCancel.builder()
                 .orderId(event.getOrderId())
@@ -125,7 +140,7 @@ public class SettlementEventConsumer {
     }
 
     /**
-     * 결제 취소 이벤트 소비
+     * 결제 취소 이벤트 소비 (멱등성 적용)
      */
     @RetryableTopic(
             attempts = "3",
@@ -138,6 +153,12 @@ public class SettlementEventConsumer {
     @Transactional
     public void consumePaymentCancelled(@Payload PaymentCancelledEvent event) {
         log.info("[Consumer] PaymentCancelled 수신: {}", event.getOrderNumber());
+
+        RawPaymentCancelId id = new RawPaymentCancelId(event.getOrderNumber(), event.getCancelledAt());
+        if (rawPaymentCancelRepository.existsById(id)) {
+            log.warn("[Consumer] 이미 존재하는 결제 취소 데이터입니다. Skip - OrderNumber: {}", event.getOrderNumber());
+            return;
+        }
 
         RawPaymentCancel entity = RawPaymentCancel.builder()
                 .orderNumber(event.getOrderNumber())

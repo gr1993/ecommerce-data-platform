@@ -1,4 +1,6 @@
 -- 1. Add reconciliation columns to raw tables
+ALTER TABLE raw_order_cancels RENAME COLUMN "userid" TO user_id;
+
 ALTER TABLE raw_orders ADD COLUMN is_reconciled BOOLEAN DEFAULT FALSE;
 ALTER TABLE raw_orders ADD COLUMN reconciliation_status VARCHAR(20) DEFAULT 'PENDING';
 
