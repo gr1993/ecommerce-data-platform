@@ -20,14 +20,17 @@ public class SettlementBatchController {
     private final JobLauncher jobLauncher;
     private final Job dailySettlementJob;
     private final Job weeklySettlementJob;
+    private final Job monthlySettlementJob;
 
     public SettlementBatchController(
             JobLauncher jobLauncher, 
             @Qualifier("dailySettlementJob") Job dailySettlementJob,
-            @Qualifier("weeklySettlementJob") Job weeklySettlementJob) {
+            @Qualifier("weeklySettlementJob") Job weeklySettlementJob,
+            @Qualifier("monthlySettlementJob") Job monthlySettlementJob) {
         this.jobLauncher = jobLauncher;
         this.dailySettlementJob = dailySettlementJob;
         this.weeklySettlementJob = weeklySettlementJob;
+        this.monthlySettlementJob = monthlySettlementJob;
     }
 
     @PostMapping("/daily/run")
@@ -50,5 +53,16 @@ public class SettlementBatchController {
         
         jobLauncher.run(weeklySettlementJob, jobParameters);
         return "Weekly Settlement Batch Job started for date: " + targetDate;
+    }
+
+    @PostMapping("/monthly/run")
+    public String runMonthlySettlementJob(@RequestParam(name = "targetDate") String targetDate) throws Exception {
+        JobParameters jobParameters = new JobParametersBuilder()
+                .addString("targetDate", targetDate)
+                .addString("datetime", LocalDateTime.now().toString())
+                .toJobParameters();
+        
+        jobLauncher.run(monthlySettlementJob, jobParameters);
+        return "Monthly Settlement Batch Job started for date: " + targetDate;
     }
 }

@@ -25,6 +25,10 @@ public class SettlementJobTest {
     @Qualifier("weeklySettlementJob")
     private Job weeklySettlementJob;
 
+    @Autowired
+    @Qualifier("monthlySettlementJob")
+    private Job monthlySettlementJob;
+
     @Test
     public void testDailySettlementJob() throws Exception {
         // Given
@@ -46,8 +50,6 @@ public class SettlementJobTest {
 
         // Then
         System.out.println("Daily Job Execution Status: " + jobExecution.getStatus());
-        System.out.println("Daily Job Exit Status: " + jobExecution.getExitStatus());
-
         assertEquals(ExitStatus.COMPLETED.getExitCode(), jobExecution.getExitStatus().getExitCode());
     }
 
@@ -65,8 +67,23 @@ public class SettlementJobTest {
 
         // Then
         System.out.println("Weekly Job Execution Status: " + jobExecution.getStatus());
-        System.out.println("Weekly Job Exit Status: " + jobExecution.getExitStatus());
+        assertEquals(ExitStatus.COMPLETED.getExitCode(), jobExecution.getExitStatus().getExitCode());
+    }
 
+    @Test
+    public void testMonthlySettlementJob() throws Exception {
+        // Given
+        String targetDate = "2026-03-23";
+        JobParameters jobParameters = new JobParametersBuilder()
+                .addString("targetDate", targetDate)
+                .toJobParameters();
+
+        // When
+        jobLauncherTestUtils.setJob(monthlySettlementJob);
+        JobExecution jobExecution = jobLauncherTestUtils.launchJob(jobParameters);
+
+        // Then
+        System.out.println("Monthly Job Execution Status: " + jobExecution.getStatus());
         assertEquals(ExitStatus.COMPLETED.getExitCode(), jobExecution.getExitStatus().getExitCode());
     }
 }
