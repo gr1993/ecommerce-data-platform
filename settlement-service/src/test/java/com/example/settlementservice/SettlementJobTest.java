@@ -32,7 +32,7 @@ public class SettlementJobTest {
     @Test
     public void testDailySettlementJob() throws Exception {
         // Given
-        String targetDate = "2026-03-23";
+        String targetDate = "2026-03-31";
 
         /*
          * JobParameter에 targetDate만 넘기는 이유는 작업 실패 시 동일한 파라미터로 재시작하여
@@ -56,7 +56,7 @@ public class SettlementJobTest {
     @Test
     public void testWeeklySettlementJob() throws Exception {
         // Given
-        String targetDate = "2026-03-23";
+        String targetDate = "2026-03-31";
         JobParameters jobParameters = new JobParametersBuilder()
                 .addString("targetDate", targetDate)
                 .toJobParameters();
@@ -73,7 +73,7 @@ public class SettlementJobTest {
     @Test
     public void testMonthlySettlementJob() throws Exception {
         // Given
-        String targetDate = "2026-03-23";
+        String targetDate = "2026-03-31";
         JobParameters jobParameters = new JobParametersBuilder()
                 .addString("targetDate", targetDate)
                 .toJobParameters();
