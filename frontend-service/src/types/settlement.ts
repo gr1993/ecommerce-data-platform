@@ -19,3 +19,12 @@ export interface ReconciliationError {
   eventAt: string
   errorMessage: string
 }
+
+export interface DailySettlementResponse {
+  settlementDate: string
+  totalOrderAmount: number
+  orderCount: number
+  refundAmount: number
+  refundCount: number
+  netRevenue: number
+}

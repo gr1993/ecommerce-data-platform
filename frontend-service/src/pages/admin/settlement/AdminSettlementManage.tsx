@@ -13,34 +13,31 @@ import {
 import dayjs from 'dayjs'
 import './AdminSettlementManage.css'
 import { settlementApi } from '../../../api/settlementApi'
-import { type SettlementData, type ReconciliationError } from '../../../types/settlement'
+import { type ReconciliationError, type DailySettlementResponse } from '../../../types/settlement'
 
 const { RangePicker } = DatePicker
 const { Title, Text } = Typography
 
 function AdminSettlementManage() {
-  const [settlementData, setSettlementData] = useState<SettlementData[]>([])
+  const [dailySettlements, setDailySettlements] = useState<DailySettlementResponse[]>([])
   const [reconciliationErrors, setReconciliationErrors] = useState<ReconciliationError[]>([])
   const [isErrorModalOpen, setIsErrorModalOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
-    dayjs().subtract(30, 'day'),
-    dayjs()
+    dayjs('2026-03-01'),
+    dayjs('2026-03-31')
   ])
+
   const [summary, setSummary] = useState({
     totalOrderAmount: 0,
-    totalDiscountAmount: 0,
-    totalCouponAmount: 0,
     totalRefundAmount: 0,
-    totalReturnAmount: 0,
     totalNetRevenue: 0,
     totalOrderCount: 0
   })
 
   // 오류 탐지 데이터 로드
   const fetchErrors = useCallback(async () => {
-    setLoading(true)
     try {
       const data = await settlementApi.getReconciliationErrors()
       setReconciliationErrors(data)
@@ -57,63 +54,45 @@ function AdminSettlementManage() {
           amount: 55000,
           eventAt: '2024-03-24 14:20:00',
           errorMessage: '주문-결제 금액 불일치 (주문: 55,000 / 결제: 50,000)'
-        },
-        {
-          orderNumber: 'ORD-20240324-042',
-          category: 'SALES',
-          status: 'PAYMENT_NOT_FOUND',
-          amount: 120000,
-          eventAt: '2024-03-24 15:10:00',
-          errorMessage: '결제 데이터 누락'
-        },
-        {
-          orderNumber: 'ORD-20240324-089',
-          category: 'CANCEL',
-          status: 'ORDER_CANCEL_NOT_FOUND',
-          amount: 35000,
-          eventAt: '2024-03-24 16:05:00',
-          errorMessage: '주문 취소 데이터 누락'
         }
       ])
-    } finally {
-      setLoading(false)
     }
   }, [])
 
   // 정산 데이터 로드
-  const loadData = useCallback(async () => {
+  const loadSettlementData = useCallback(async () => {
+    setLoading(true)
     try {
-      const data = await settlementApi.getSettlementList()
-      setSettlementData(data)
+      const start = dateRange[0].format('YYYY-MM-DD')
+      const end = dateRange[1].format('YYYY-MM-DD')
+      const data = await settlementApi.getDailySettlements(start, end)
+      setDailySettlements(data)
 
       // 요약 통계 계산
       const total = data.reduce((acc, item) => ({
-        totalOrderAmount: acc.totalOrderAmount + item.total_order_amount,
-        totalDiscountAmount: 0,
-        totalCouponAmount: 0,
-        totalRefundAmount: acc.totalRefundAmount + item.refund_amount,
-        totalReturnAmount: acc.totalReturnAmount + item.return_amount,
-        totalNetRevenue: acc.totalNetRevenue + item.net_revenue,
-        totalOrderCount: acc.totalOrderCount + item.order_count
+        totalOrderAmount: acc.totalOrderAmount + item.totalOrderAmount,
+        totalRefundAmount: acc.totalRefundAmount + item.refundAmount,
+        totalNetRevenue: acc.totalNetRevenue + item.netRevenue,
+        totalOrderCount: acc.totalOrderCount + item.orderCount
       }), {
         totalOrderAmount: 0,
-        totalDiscountAmount: 0,
-        totalCouponAmount: 0,
         totalRefundAmount: 0,
-        totalReturnAmount: 0,
         totalNetRevenue: 0,
         totalOrderCount: 0
       })
       setSummary(total)
     } catch (error) {
+      console.error('정산 데이터 로드 실패:', error)
       message.error('정산 데이터를 불러오는데 실패했습니다.')
+    } finally {
+      setLoading(false)
     }
-  }, [])
+  }, [dateRange])
 
   useEffect(() => {
-    loadData()
+    loadSettlementData()
     fetchErrors()
-  }, [loadData, fetchErrors, dateRange])
+  }, [loadSettlementData, fetchErrors])
 
   const handleDateRangeChange = (dates: any) => {
     if (dates) {
@@ -125,43 +104,54 @@ function AdminSettlementManage() {
     message.success('보고서 다운로드가 시작되었습니다.')
   }
 
-  const columns: ColumnsType<SettlementData> = [
+  const columns: ColumnsType<DailySettlementResponse> = [
     {
-      title: '정산 기간',
-      dataIndex: 'period',
-      key: 'period',
-      width: 200,
+      title: '정산 일자',
+      dataIndex: 'settlementDate',
+      key: 'settlementDate',
+      width: 150,
+      sorter: (a, b) => dayjs(a.settlementDate).unix() - dayjs(b.settlementDate).unix(),
     },
     {
       title: '주문 총액',
-      dataIndex: 'total_order_amount',
-      key: 'total_order_amount',
+      dataIndex: 'totalOrderAmount',
+      key: 'totalOrderAmount',
       render: (amount: number) => `${(amount ?? 0).toLocaleString()}원`,
       align: 'right',
       width: 150,
     },
     {
-      title: '할인/쿠폰',
-      key: 'discount_coupon',
-      render: () => `0원`,
+      title: '주문 건수',
+      dataIndex: 'orderCount',
+      key: 'orderCount',
+      render: (count: number) => `${(count ?? 0).toLocaleString()}건`,
       align: 'right',
-      width: 130,
+      width: 100,
     },
     {
-      title: '환불/반품',
-      key: 'refund_return',
-      render: (_, record) => (
+      title: '환불/반품 금액',
+      dataIndex: 'refundAmount',
+      key: 'refundAmount',
+      render: (amount: number) => (
         <span style={{ color: '#dc3545' }}>
-          -{((record.refund_amount ?? 0) + (record.return_amount ?? 0)).toLocaleString()}원
+          {Math.abs(amount ?? 0).toLocaleString()}원
         </span>
       ),
       align: 'right',
       width: 130,
     },
     {
+      title: '환불 건수',
+      dataIndex: 'refundCount',
+      key: 'refundCount',
+      render: (count: number) => `${(count ?? 0).toLocaleString()}건`,
+      align: 'right',
+      width: 100,
+    },
+    {
       title: '순매출',
-      dataIndex: 'net_revenue',
-      key: 'net_revenue',
+      dataIndex: 'netRevenue',
+      key: 'netRevenue',
       render: (amount: number) => (
         <strong style={{ color: '#28a745', fontSize: '16px' }}>
           {(amount ?? 0).toLocaleString()}원
@@ -169,19 +159,6 @@ function AdminSettlementManage() {
       ),
       align: 'right',
       width: 150,
-    },
-    {
-      title: '주문 건수',
-      dataIndex: 'order_count',
-      key: 'order_count',
-      align: 'right',
-      width: 100,
-    },
-    {
-      title: '생성 일시',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      width: 160,
     },
   ]
 
@@ -239,14 +216,6 @@ function AdminSettlementManage() {
       dataIndex: 'eventAt',
       key: 'eventAt',
       width: 180,
-    },
-    {
-      title: '관리',
-      key: 'action',
-      render: () => (
-        <Button size="small">재대조</Button>
-      ),
-      width: 80,
     }
   ]
 
@@ -256,7 +225,7 @@ function AdminSettlementManage() {
         <div className="settlement-header">
           <Title level={2}>정산 관리</Title>
           <Space>
-            <Button icon={<ReloadOutlined />} onClick={fetchErrors} loading={loading}>새로고침</Button>
+            <Button icon={<ReloadOutlined />} onClick={() => { loadSettlementData(); fetchErrors(); }} loading={loading}>새로고침</Button>
             <RangePicker
               value={dateRange}
               onChange={handleDateRangeChange}
@@ -290,12 +259,12 @@ function AdminSettlementManage() {
           <Col xs={24} sm={12} lg={6}>
             <Card>
               <Statistic
-                title="할인/쿠폰 적용 금액"
-                value={0}
-                prefix={<DollarOutlined />}
-                suffix="원"
+                title="총 주문 건수"
+                value={summary.totalOrderCount}
+                prefix={<ShoppingOutlined />}
+                suffix="건"
                 valueStyle={{ color: '#6c757d' }}
-                formatter={() => `0`}
+                formatter={(value) => `${Number(value).toLocaleString()}`}
               />
             </Card>
           </Col>
@@ -303,11 +272,11 @@ function AdminSettlementManage() {
             <Card>
               <Statistic
                 title="환불/반품 금액"
-                value={summary.totalRefundAmount + summary.totalReturnAmount}
+                value={summary.totalRefundAmount}
                 prefix={<DollarOutlined />}
                 suffix="원"
                 valueStyle={{ color: '#dc3545' }}
-                formatter={(value) => `-${Number(value).toLocaleString()}`}
+                formatter={(value) => `${Math.abs(Number(value)).toLocaleString()}`}
               />
             </Card>
           </Col>
@@ -347,11 +316,10 @@ function AdminSettlementManage() {
             {reconciliationErrors.length > 0 ? (
               <Table
                 columns={errorColumns}
-                dataSource={reconciliationErrors.slice(0, 3)} // 최신 3건만 표시
+                dataSource={reconciliationErrors.slice(0, 3)}
                 rowKey="orderNumber"
                 size="small"
                 pagination={false}
-                loading={loading}
               />
             ) : (
               <div style={{ textAlign: 'center', padding: '20px' }}>
@@ -362,12 +330,13 @@ function AdminSettlementManage() {
           </Card>
 
           {/* 정산 내역 테이블 */}
-          <Card title="정산 내역 (배치 결과)">
+          <Card title="일별 정산 내역 (배치 결과)">
             <Table
               columns={columns}
-              dataSource={settlementData}
-              rowKey="settlement_id"
+              dataSource={dailySettlements}
+              rowKey="settlementDate"
               scroll={{ x: 'max-content' }}
+              loading={loading}
               pagination={{
                 pageSize: 10,
                 showSizeChanger: true,
@@ -401,7 +370,6 @@ function AdminSettlementManage() {
               pageSize: 10,
               showSizeChanger: true,
             }}
-            loading={loading}
           />
         </Modal>
       </div>

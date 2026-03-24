@@ -1,5 +1,5 @@
 import { API_BASE_URL } from '../config/env'
-import { type ReconciliationError, type SettlementData } from '../types/settlement'
+import { type ReconciliationError, type SettlementData, type DailySettlementResponse } from '../types/settlement'
 
 export const settlementApi = {
   /**
@@ -14,15 +14,21 @@ export const settlementApi = {
   },
 
   /**
-   * 정산 내역 리스트 가져오기 (샘플 데이터 포함)
+   * 일별 정산 데이터 리스트 가져오기
+   */
+  getDailySettlements: async (start: string, end: string): Promise<DailySettlementResponse[]> => {
+    const response = await fetch(`${API_BASE_URL}/api/settlement/dashboard/daily?start=${start}&end=${end}`)
+    if (!response.ok) {
+      throw new Error('일별 정산 데이터를 불러오는데 실패했습니다.')
+    }
+    return response.json()
+  },
+
+  /**
+   * 정산 내역 리스트 가져오기 (샘플 데이터 포함 - 실제로는 getDailySettlements 사용 권장)
    */
   getSettlementList: async (): Promise<SettlementData[]> => {
-    // TODO: 실제 API 연동 시 아래 fetch 활성화
-    // const response = await fetch(`${API_BASE_URL}/api/settlement/history`)
-    // if (!response.ok) throw new Error('정산 내역 로드 실패')
-    // return response.json()
-
-    // 현재는 기존에 정의된 샘플 데이터 반환
+    // 이전 샘플 데이터 유지 (필요 시)
     return [
       {
         settlement_id: '1',
