@@ -1,15 +1,16 @@
 package com.example.settlementservice.service;
 
+import com.example.settlementservice.domain.entity.DailyGeneralLedger;
 import com.example.settlementservice.domain.entity.ReconciliationStatus;
+import com.example.settlementservice.dto.DailySettlementResponse;
 import com.example.settlementservice.dto.ReconciliationErrorResponse;
-import com.example.settlementservice.repository.RawOrderCancelRepository;
-import com.example.settlementservice.repository.RawOrderRepository;
-import com.example.settlementservice.repository.RawPaymentCancelRepository;
-import com.example.settlementservice.repository.RawPaymentRepository;
+import com.example.settlementservice.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -21,6 +22,7 @@ public class SettlementDashboardService {
     private final RawOrderCancelRepository rawOrderCancelRepository;
     private final RawPaymentRepository rawPaymentRepository;
     private final RawPaymentCancelRepository rawPaymentCancelRepository;
+    private final DailyGeneralLedgerRepository dailyGeneralLedgerRepository;
 
     private static final List<ReconciliationStatus> ERROR_STATUSES = List.of(
             ReconciliationStatus.AMOUNT_MISMATCH,
@@ -29,6 +31,51 @@ public class SettlementDashboardService {
             ReconciliationStatus.ORDER_NOT_FOUND,
             ReconciliationStatus.ORDER_CANCEL_NOT_FOUND
     );
+
+    /**
+     * 특정 기간의 일별 정산 데이터 조회
+     */
+    @Transactional(readOnly = true)
+    public List<DailySettlementResponse> getDailySettlements(LocalDate start, LocalDate end) {
+        List<DailyGeneralLedger> ledgers = dailyGeneralLedgerRepository
+                .findBySettlementDateBetweenOrderBySettlementDateAsc(start, end);
+
+        // 날짜별로 그룹화 (하나의 날짜에 SALES, CANCEL 두 개가 올 수 있음)
+        Map<LocalDate, List<DailyGeneralLedger>> groupedByDate = ledgers.stream()
+                .collect(Collectors.groupingBy(DailyGeneralLedger::getSettlementDate));
+
+        return groupedByDate.entrySet().stream()
+                .map(entry -> {
+                    LocalDate date = entry.getKey();
+                    List<DailyGeneralLedger> dayLedgers = entry.getValue();
+
+                    BigDecimal salesAmount = BigDecimal.ZERO;
+                    int salesCount = 0;
+                    BigDecimal cancelAmount = BigDecimal.ZERO;
+                    int cancelCount = 0;
+
+                    for (DailyGeneralLedger ledger : dayLedgers) {
+                        if ("SALES".equals(ledger.getLedgerType())) {
+                            salesAmount = ledger.getTotalAmount();
+                            salesCount = ledger.getTotalCount();
+                        } else if ("CANCEL".equals(ledger.getLedgerType())) {
+                            cancelAmount = ledger.getTotalAmount();
+                            cancelCount = ledger.getTotalCount();
+                        }
+                    }
+
+                    return DailySettlementResponse.builder()
+                            .settlementDate(date)
+                            .totalOrderAmount(salesAmount)
+                            .orderCount(salesCount)
+                            .refundAmount(cancelAmount)
+                            .refundCount(cancelCount)
+                            .netRevenue(salesAmount.add(cancelAmount))
+                            .build();
+                })
+                .sorted(Comparator.comparing(DailySettlementResponse::getSettlementDate).reversed())
+                .collect(Collectors.toList());
+    }
 
     /**
      * 모든 정산 오류 내역 조회 (주문 번호 기준 취합)
