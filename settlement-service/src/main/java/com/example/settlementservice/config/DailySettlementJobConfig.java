@@ -17,8 +17,8 @@ import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.item.ExecutionContext;
 import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemWriter;
-import org.springframework.batch.item.database.JpaPagingItemReader;
-import org.springframework.batch.item.database.builder.JpaPagingItemReaderBuilder;
+import org.springframework.batch.item.database.JpaCursorItemReader;
+import org.springframework.batch.item.database.builder.JpaCursorItemReaderBuilder;
 import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -129,7 +129,7 @@ public class DailySettlementJobConfig {
 
     @Bean
     @StepScope
-    public JpaPagingItemReader<RawOrder> dailySalesReader(
+    public JpaCursorItemReader<RawOrder> dailySalesReader(
             @Value("#{stepExecutionContext['partitionDate']}") String partitionDate) {
         
         LocalDate date = LocalDate.parse(partitionDate);
@@ -138,12 +138,11 @@ public class DailySettlementJobConfig {
 
         log.info("[DailySalesReader] Partition Date: {}", partitionDate);
 
-        return new JpaPagingItemReaderBuilder<RawOrder>()
+        return new JpaCursorItemReaderBuilder<RawOrder>()
                 .name("dailySalesReader")
                 .entityManagerFactory(entityManagerFactory)
                 .queryString("SELECT o FROM RawOrder o WHERE o.isReconciled = false AND o.orderedAt BETWEEN :start AND :end")
                 .parameterValues(Map.of("start", start, "end", end))
-                .pageSize(CHUNK_SIZE)
                 .build();
     }
 
@@ -225,7 +224,7 @@ public class DailySettlementJobConfig {
 
     @Bean
     @StepScope
-    public JpaPagingItemReader<RawOrderCancel> dailyCancelReader(
+    public JpaCursorItemReader<RawOrderCancel> dailyCancelReader(
             @Value("#{stepExecutionContext['partitionDate']}") String partitionDate) {
         
         LocalDate date = LocalDate.parse(partitionDate);
@@ -234,12 +233,11 @@ public class DailySettlementJobConfig {
 
         log.info("[DailyCancelReader] Partition Date: {}", partitionDate);
 
-        return new JpaPagingItemReaderBuilder<RawOrderCancel>()
+        return new JpaCursorItemReaderBuilder<RawOrderCancel>()
                 .name("dailyCancelReader")
                 .entityManagerFactory(entityManagerFactory)
                 .queryString("SELECT oc FROM RawOrderCancel oc WHERE oc.isReconciled = false AND oc.cancelledAt BETWEEN :start AND :end")
                 .parameterValues(Map.of("start", start, "end", end))
-                .pageSize(CHUNK_SIZE)
                 .build();
     }
 
