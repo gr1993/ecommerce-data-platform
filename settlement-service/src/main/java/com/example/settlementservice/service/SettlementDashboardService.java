@@ -25,7 +25,9 @@ public class SettlementDashboardService {
     private static final List<ReconciliationStatus> ERROR_STATUSES = List.of(
             ReconciliationStatus.AMOUNT_MISMATCH,
             ReconciliationStatus.PAYMENT_NOT_FOUND,
-            ReconciliationStatus.PAYMENT_CANCEL_NOT_FOUND
+            ReconciliationStatus.PAYMENT_CANCEL_NOT_FOUND,
+            ReconciliationStatus.ORDER_NOT_FOUND,
+            ReconciliationStatus.ORDER_CANCEL_NOT_FOUND
     );
 
     /**
