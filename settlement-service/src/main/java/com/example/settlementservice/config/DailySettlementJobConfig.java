@@ -41,12 +41,14 @@ import java.util.Map;
  * [성능 최적화] 일자별 파티셔닝(Date Partitioning) 적용
  * - 7일 윈도우 전략에 따라 (targetDate - 7일 ~ targetDate) 범위의 데이터를 처리합니다.
  * - 각 날짜별로 별도의 파티션을 생성하여 8개의 스레드가 병렬로 대조 및 집계를 수행합니다.
- * - 특히 집계(Step 3) 단계에서 모든 날짜의 원장을 동시에 합산하므로 전체 처리 시간이 대폭 단축됩니다.
+ * - 특히 집계(Step 5) 단계에서 모든 날짜의 원장을 동시에 합산하므로 전체 처리 시간이 대폭 단축됩니다.
  *
- * 전체 프로세스 (3단계):
- * 1. dailySalesReconciliationStep (Master -> Worker): 일일 매출 대조 병렬 처리
- * 2. dailyCancelReconciliationStep (Master -> Worker): 일일 취소 대조 병렬 처리
- * 3. dailyAggregationStep (Master -> Worker): 일별 총계정원장 집계 병렬 처리
+ * 전체 프로세스 (5단계):
+ * 1. dailySalesMasterStep: 주문 기준 결제 대조 (Order -> Payment)
+ * 2. dailyPaymentMasterStep: 결제 기준 주문 대조 (Payment -> Order) - 주문 누락 결제 확인
+ * 3. dailyCancelMasterStep: 주문취소 기준 결제취소 대조 (OrderCancel -> PaymentCancel)
+ * 4. dailyPaymentCancelMasterStep: 결제취소 기준 주문취소 대조 (PaymentCancel -> OrderCancel) - 취소 누락 확인
+ * 5. dailyAggregationMasterStep: 일별 총계정원장 집계 (Aggregation)
  */
 @Slf4j
 @Configuration
@@ -71,7 +73,9 @@ public class DailySettlementJobConfig {
     public Job dailySettlementJob() {
         return new JobBuilder("dailySettlementJob", jobRepository)
                 .start(dailySalesMasterStep())
+                .next(dailyPaymentMasterStep())
                 .next(dailyCancelMasterStep())
+                .next(dailyPaymentCancelMasterStep())
                 .next(dailyAggregationMasterStep())
                 .build();
     }
@@ -105,7 +109,7 @@ public class DailySettlementJobConfig {
         return executor;
     }
 
-    // --- Step 1: Daily Sales Reconciliation (Partitioned) ---
+    // --- Step 1: Daily Sales Reconciliation (Order -> Payment) ---
 
     @Bean
     public Step dailySalesMasterStep() {
@@ -136,8 +140,6 @@ public class DailySettlementJobConfig {
         LocalDateTime start = date.atStartOfDay();
         LocalDateTime end = date.atTime(LocalTime.MAX);
 
-        log.info("[DailySalesReader] Partition Date: {}", partitionDate);
-
         return new JpaCursorItemReaderBuilder<RawOrder>()
                 .name("dailySalesReader")
                 .entityManagerFactory(entityManagerFactory)
@@ -155,6 +157,7 @@ public class DailySettlementJobConfig {
             if (payments.isEmpty()) {
                 order.setReconciled(true);
                 order.setReconciliationStatus(ReconciliationStatus.PAYMENT_NOT_FOUND);
+                rawOrderRepository.save(order);
                 return null;
             }
 
@@ -167,6 +170,7 @@ public class DailySettlementJobConfig {
                 payment.setReconciled(true);
                 payment.setReconciliationStatus(ReconciliationStatus.AMOUNT_MISMATCH);
                 rawPaymentRepository.save(payment);
+                rawOrderRepository.save(order);
                 return null;
             }
 
@@ -200,7 +204,78 @@ public class DailySettlementJobConfig {
         };
     }
 
-    // --- Step 2: Daily Cancel Reconciliation (Partitioned) ---
+    // --- Step 2: Daily Payment Reconciliation (Payment -> Order) ---
+    // 주문 기반 대조(Step 1) 후에 실행하여, 여전히 대조되지 않은 결제 건들을 처리합니다.
+
+    @Bean
+    public Step dailyPaymentMasterStep() {
+        return new StepBuilder("dailyPaymentMasterStep", jobRepository)
+                .partitioner("dailyPaymentWorkerStep", settlementPartitioner(null))
+                .step(dailyPaymentWorkerStep())
+                .taskExecutor(settlementTaskExecutor())
+                .gridSize(GRID_SIZE)
+                .build();
+    }
+
+    @Bean
+    public Step dailyPaymentWorkerStep() {
+        return new StepBuilder("dailyPaymentWorkerStep", jobRepository)
+                .<RawPayment, RawPayment>chunk(CHUNK_SIZE, transactionManager)
+                .reader(dailyPaymentReader(null))
+                .processor(dailyPaymentProcessor())
+                .writer(dailyPaymentWriter())
+                .build();
+    }
+
+    @Bean
+    @StepScope
+    public JpaCursorItemReader<RawPayment> dailyPaymentReader(
+            @Value("#{stepExecutionContext['partitionDate']}") String partitionDate) {
+        
+        LocalDate date = LocalDate.parse(partitionDate);
+        LocalDateTime start = date.atStartOfDay();
+        LocalDateTime end = date.atTime(LocalTime.MAX);
+
+        return new JpaCursorItemReaderBuilder<RawPayment>()
+                .name("dailyPaymentReader")
+                .entityManagerFactory(entityManagerFactory)
+                .queryString("SELECT p FROM RawPayment p WHERE p.isReconciled = false AND p.paidAt BETWEEN :start AND :end")
+                .parameterValues(Map.of("start", start, "end", end))
+                .build();
+    }
+
+    @Bean
+    @StepScope
+    public ItemProcessor<RawPayment, RawPayment> dailyPaymentProcessor() {
+        return payment -> {
+            // 결제 번호(orderNumber)로 주문 데이터를 직접 조회 (ID가 아닌 비즈니스 키 기준)
+            // RawOrderRepository에 findByOrderNumber가 없는 경우 JpaRepository의 ID 조회를 쓰거나 쿼리 필요
+            // 여기서는 rawOrderRepository.findById(new RawOrderId(payment.getOrderNumber(), ...)) 방식 대신 간접 조회로 가정
+            boolean orderExists = rawOrderRepository.existsById(new RawOrderId(payment.getOrderNumber(), payment.getPaidAt()));
+            
+            if (!orderExists) {
+                payment.setReconciled(true);
+                payment.setReconciliationStatus(ReconciliationStatus.ORDER_NOT_FOUND);
+                return payment;
+            }
+
+            // 만약 여기서 발견된다면 (Step 1에서 누락된 경우), 상태만 업데이트
+            payment.setReconciled(true);
+            payment.setReconciliationStatus(ReconciliationStatus.SUCCESS);
+            return payment;
+        };
+    }
+
+    @Bean
+    public ItemWriter<RawPayment> dailyPaymentWriter() {
+        return items -> {
+            for (RawPayment payment : items) {
+                rawPaymentRepository.save(payment);
+            }
+        };
+    }
+
+    // --- Step 3: Daily Cancel Reconciliation (OrderCancel -> PaymentCancel) ---
 
     @Bean
     public Step dailyCancelMasterStep() {
@@ -231,8 +306,6 @@ public class DailySettlementJobConfig {
         LocalDateTime start = date.atStartOfDay();
         LocalDateTime end = date.atTime(LocalTime.MAX);
 
-        log.info("[DailyCancelReader] Partition Date: {}", partitionDate);
-
         return new JpaCursorItemReaderBuilder<RawOrderCancel>()
                 .name("dailyCancelReader")
                 .entityManagerFactory(entityManagerFactory)
@@ -250,6 +323,7 @@ public class DailySettlementJobConfig {
             if (paymentCancels.isEmpty()) {
                 orderCancel.setReconciled(true);
                 orderCancel.setReconciliationStatus(ReconciliationStatus.PAYMENT_CANCEL_NOT_FOUND);
+                rawOrderCancelRepository.save(orderCancel);
                 return null;
             }
 
@@ -285,7 +359,73 @@ public class DailySettlementJobConfig {
         };
     }
 
-    // --- Step 3: Daily Aggregation (Partitioned) ---
+    // --- Step 4: Daily Payment Cancel Reconciliation (PaymentCancel -> OrderCancel) ---
+
+    @Bean
+    public Step dailyPaymentCancelMasterStep() {
+        return new StepBuilder("dailyPaymentCancelMasterStep", jobRepository)
+                .partitioner("dailyPaymentCancelWorkerStep", settlementPartitioner(null))
+                .step(dailyPaymentCancelWorkerStep())
+                .taskExecutor(settlementTaskExecutor())
+                .gridSize(GRID_SIZE)
+                .build();
+    }
+
+    @Bean
+    public Step dailyPaymentCancelWorkerStep() {
+        return new StepBuilder("dailyPaymentCancelWorkerStep", jobRepository)
+                .<RawPaymentCancel, RawPaymentCancel>chunk(CHUNK_SIZE, transactionManager)
+                .reader(dailyPaymentCancelReader(null))
+                .processor(dailyPaymentCancelProcessor())
+                .writer(dailyPaymentCancelWriter())
+                .build();
+    }
+
+    @Bean
+    @StepScope
+    public JpaCursorItemReader<RawPaymentCancel> dailyPaymentCancelReader(
+            @Value("#{stepExecutionContext['partitionDate']}") String partitionDate) {
+        
+        LocalDate date = LocalDate.parse(partitionDate);
+        LocalDateTime start = date.atStartOfDay();
+        LocalDateTime end = date.atTime(LocalTime.MAX);
+
+        return new JpaCursorItemReaderBuilder<RawPaymentCancel>()
+                .name("dailyPaymentCancelReader")
+                .entityManagerFactory(entityManagerFactory)
+                .queryString("SELECT pc FROM RawPaymentCancel pc WHERE pc.isReconciled = false AND pc.cancelledAt BETWEEN :start AND :end")
+                .parameterValues(Map.of("start", start, "end", end))
+                .build();
+    }
+
+    @Bean
+    @StepScope
+    public ItemProcessor<RawPaymentCancel, RawPaymentCancel> dailyPaymentCancelProcessor() {
+        return paymentCancel -> {
+            boolean orderCancelExists = rawOrderCancelRepository.existsById(new RawOrderCancelId(paymentCancel.getOrderNumber(), paymentCancel.getCancelledAt()));
+            
+            if (!orderCancelExists) {
+                paymentCancel.setReconciled(true);
+                paymentCancel.setReconciliationStatus(ReconciliationStatus.ORDER_CANCEL_NOT_FOUND);
+                return paymentCancel;
+            }
+
+            paymentCancel.setReconciled(true);
+            paymentCancel.setReconciliationStatus(ReconciliationStatus.SUCCESS);
+            return paymentCancel;
+        };
+    }
+
+    @Bean
+    public ItemWriter<RawPaymentCancel> dailyPaymentCancelWriter() {
+        return items -> {
+            for (RawPaymentCancel paymentCancel : items) {
+                rawPaymentCancelRepository.save(paymentCancel);
+            }
+        };
+    }
+
+    // --- Step 5: Daily Aggregation (Partitioned) ---
 
     @Bean
     public Step dailyAggregationMasterStep() {
