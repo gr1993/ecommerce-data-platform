@@ -68,6 +68,18 @@ services:
     networks:
       - ecommerce-net
 
+  ksqldb-server:
+    image: confluentinc/cp-ksqldb-server
+    hostname: ksqldb-server
+    container_name: ksqldb-server
+    ports:
+      - "8088:8088"
+    environment:
+      KSQL_LISTENERS: "http://0.0.0.0:8088"
+      KSQL_BOOTSTRAP_SERVERS: "kafka1:9091,kafka2:9092,kafka3:9094"
+    networks:
+      - ecommerce-net
+
   kafka-ui:
     image: provectuslabs/kafka-ui
     container_name: kafka-ui
@@ -77,6 +89,7 @@ services:
     environment:
       - KAFKA_CLUSTERS_0_NAME=local-kraft
       - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka1:9091,kafka2:9092,kafka3:9094
+      - KAFKA_CLUSTERS_0_KSQLDBSERVER=http://ksqldb-server:8088
     networks:
       - ecommerce-net
 
