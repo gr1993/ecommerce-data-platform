@@ -42,6 +42,8 @@ Analytics --> Warehouse
 본 프로젝트는 클라우드 네이티브 환경 이해도를 높이기 위해 **쿠버네티스 환경**에서 서비스와 저장소를 구성한다.  
 
 ```
+[analytics-service]
+    └── 분석 서비스
 [docs]
 [event-bot]
     └── ecommerce-msa 환경과 유사하게 가짜 이벤트를 발생시키는 시뮬레이터
@@ -51,8 +53,6 @@ Analytics --> Warehouse
     └── Kafka, ClickHouse 등 쿠버네티스 인프라 구성 스크립트
 [settlement-service]
     └── 정산 서비스
-[analytics-service]
-    └── 분석 서비스
 ```
 
 
