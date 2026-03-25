@@ -9,7 +9,7 @@ Raw 데이터 적재 로직을 처리할 예정이다.
 
 
 ### Reconciliation(대조)
-event-bot에서는 일부러 결함이 포함된 이벤트를 발생시키도록 구현할 예정이다.  
+[event-bot](https://github.com/gr1993/ecommerce-data-platform/tree/main/event-bot)에서는 일부러 결함이 포함된 이벤트를 발생시키도록 구현할 예정이다.  
 예를 들어, 1,000건 중 약 5건은 OrderCreated 이벤트만 발생하고 PaymentConfirmed 이벤트는  
 발생하지 않도록 한다. 정산 서비스의 배치가 실행될 때, 결제나 주문 완료 이벤트가 없는 주문을 찾아  
 오류 주문으로 분류한다. 이 과정에서 **결제와 주문 Raw 테이블은 order_number를 공통 키**로 사용하여  
