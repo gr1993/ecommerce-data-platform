@@ -13,6 +13,9 @@ ClickHouse 없이도 충분히 구현할 수 있다.
 우선 ksqlDB에서 데이터를 가공(ETL)한 뒤, 고정 집계 데이터는 KTable을 통해 State Store(RocksDB)에  
 저장한다. 이후 최종 집계 결과를 ClickHouse에 적재하는 구조로 설계하였다.  
 
+* [ksqlDB 정리 블로그](https://little-pecorino-c28.notion.site/ksqlDB-31a82094ef0a803990e2de782a51cc5a)
+* [ClickHouse 정리 블로그](https://little-pecorino-c28.notion.site/ClickHouse-32d82094ef0a805f879bfe3b97967611)
+
 
 ## 매출 통계
 매출 통계는 조회 시 검색 기간, 일/주/월 단위 설정 등 다양한 필터가 적용되므로, 정적 지표가 아닌 동적  
@@ -27,3 +30,15 @@ ClickHouse 없이도 충분히 구현할 수 있다.
 이벤트를 기준으로 데이터를 저장하면, 정산이 완료된 주문만 반영되므로 지표의 신뢰성을 더욱 높일 수 있다.  
 현재는 정산 관리 메뉴를 통해 데이터 무결성을 별도로 검증할 수 있는 지표가 이미 제공되고 있으므로,  
 이번에는 **ksqlDB를 활용한 실시간 ETL 처리 방식을 선택하여 데이터를 수집**하기로 결정하였다.  
+
+
+## ClickHouse
+ksqlDB를 활용해 데이터를 ClickHouse에 적합한 형태로 가공한 뒤, 별도의 Kafka Connector나  
+Kafka Consumer를 두지 않고 ClickHouse의 Kafka Engine을 통해 Kafka 토픽을 직접 구독하여  
+데이터를 Insert하도록 구현할 예정이다.  
+ClickHouse는 전통적인 RDBMS와 구조적 특성이 크게 다르기 때문에 스키마 설계에도 신중한 접근이  
+필요하다. 일반적인 데이터 웨어하우스(DW)에서는 저장 공간 효율을 위해 사실 테이블(Fact)과 차원  
+테이블(Dimension)을 분리하는 별 스키마를 주로 사용한다.  
+하지만 ClickHouse는 조인보다 단일 테이블 스캔 성능이 훨씬 뛰어나기 때문에, 카테고리명, 상품명과  
+같은 모든 차원 정보를 사실 테이블에 함께 포함시키는 비정규화된 Wide Table 방식이 성능을 극대화하는  
+데 유리하다. 이러한 특성을 고려하여 본 시스템에서는 **Wide Table 기반으로 스키마를 설계**하였다.  
