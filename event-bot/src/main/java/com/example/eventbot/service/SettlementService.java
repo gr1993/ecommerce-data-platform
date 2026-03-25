@@ -7,6 +7,8 @@ import com.example.eventbot.domain.event.PaymentCancelledEvent;
 import com.example.eventbot.domain.event.PaymentConfirmedEvent;
 import com.example.eventbot.dto.request.SettlementSettingsRequest;
 import com.example.eventbot.dto.response.SettlementSettingsResponse;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -16,6 +18,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Random;
 import java.util.UUID;
 
@@ -26,6 +31,40 @@ public class SettlementService {
     private final KafkaProducerService kafkaProducerService;
     private final SettlementSettings settings = new SettlementSettings();
     private final Random random = new Random();
+    
+    // 상품 마스터 데이터 정의
+    @Getter
+    @AllArgsConstructor
+    private static class ProductMaster {
+        private final Long productId;
+        private final String productName;
+        private final Long categoryId;
+        private final String categoryName;
+        private final long basePrice;
+    }
+
+    private static final List<ProductMaster> PRODUCT_MASTERS = Arrays.asList(
+        // 패션 (Category ID: 100)
+        new ProductMaster(1001L, "오버핏 맨투맨", 100L, "패션", 39000L),
+        new ProductMaster(1002L, "슬림핏 슬랙스", 100L, "패션", 49000L),
+        new ProductMaster(1003L, "데일리 캔버스화", 100L, "패션", 59000L),
+        // 가전 (Category ID: 200)
+        new ProductMaster(2001L, "노이즈캔슬링 헤드폰", 200L, "가전", 249000L),
+        new ProductMaster(2002L, "4K 게이밍 모니터", 200L, "가전", 399000L),
+        new ProductMaster(2003L, "기계식 키보드", 200L, "가전", 129000L),
+        // 식품 (Category ID: 300)
+        new ProductMaster(3001L, "유기농 샐러드 도시락", 300L, "식품", 8900L),
+        new ProductMaster(3002L, "프리미엄 원두 커피", 300L, "식품", 15900L),
+        new ProductMaster(3003L, "닭가슴살 패키지", 300L, "식품", 29900L),
+        // 뷰티 (Category ID: 400)
+        new ProductMaster(4001L, "수분 진정 크림", 400L, "뷰티", 24000L),
+        new ProductMaster(4002L, "롱래스팅 립스틱", 400L, "뷰티", 18000L),
+        new ProductMaster(4003L, "저자극 클렌징 폼", 400L, "뷰티", 12000L),
+        // 스포츠 (Category ID: 500)
+        new ProductMaster(5001L, "요가 매트 8mm", 500L, "스포츠", 35000L),
+        new ProductMaster(5002L, "경량 러닝화", 500L, "스포츠", 89000L),
+        new ProductMaster(5003L, "단백질 쉐이커", 500L, "스포츠", 4500L)
+    );
 
     public SettlementSettings getSettings() {
         return settings;
@@ -103,7 +142,30 @@ public class SettlementService {
 
     private void generateSettlementEventSet(boolean isError, boolean shouldCancel) {
         String orderNumber = "ORD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-        long amount = (random.nextInt(10) + 1) * 10000L;
+        
+        // 상품 항목 생성 (1~2개)
+        int itemCount = random.nextInt(2) + 1;
+        List<OrderCreatedEvent.OrderItemSnapshot> items = new ArrayList<>();
+        long totalAmount = 0;
+        
+        for (int i = 0; i < itemCount; i++) {
+            // 마스터 데이터에서 랜덤 선택
+            ProductMaster master = PRODUCT_MASTERS.get(random.nextInt(PRODUCT_MASTERS.size()));
+            int quantity = random.nextInt(2) + 1; // 1~2개
+            long itemTotal = master.getBasePrice() * quantity;
+            totalAmount += itemTotal;
+            
+            items.add(OrderCreatedEvent.OrderItemSnapshot.builder()
+                    .orderItemId(random.nextLong(1000000))
+                    .productId(master.getProductId())
+                    .productName(master.getProductName())
+                    .categoryId(master.getCategoryId())
+                    .categoryName(master.getCategoryName())
+                    .quantity(quantity)
+                    .unitPrice(new BigDecimal(master.getBasePrice()))
+                    .totalPrice(new BigDecimal(itemTotal))
+                    .build());
+        }
 
         long daysBetween = ChronoUnit.DAYS.between(settings.getStartDate(), settings.getEndDate());
         LocalDate randomDate = settings.getStartDate().plusDays(random.nextLong(daysBetween + 1));
@@ -115,7 +177,9 @@ public class SettlementService {
                 .orderNumber(orderNumber)
                 .userId(random.nextLong(10000))
                 .orderStatus("CONFIRMED")
-                .totalPaymentAmount(new BigDecimal(amount))
+                .totalProductAmount(new BigDecimal(totalAmount))
+                .totalPaymentAmount(new BigDecimal(totalAmount))
+                .orderItems(items)
                 .orderedAt(eventDateTime)
                 .build();
 
@@ -123,7 +187,7 @@ public class SettlementService {
                 .orderNumber(orderNumber)
                 .paymentKey("PAY-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
                 .paymentMethod("CARD")
-                .paymentAmount(amount)
+                .paymentAmount(totalAmount)
                 .paymentStatus("DONE")
                 .paidAt(eventDateTime)
                 .customerId(String.valueOf(random.nextLong(10000)))
@@ -154,7 +218,7 @@ public class SettlementService {
 
                 PaymentCancelledEvent cancelPayment = PaymentCancelledEvent.builder()
                         .orderNumber(orderNumber)
-                        .amount(amount)
+                        .amount(totalAmount)
                         .customerId(paymentEvent.getCustomerId())
                         .cancelReason("고객 변심")
                         .cancelledAt(cancelDateTime)

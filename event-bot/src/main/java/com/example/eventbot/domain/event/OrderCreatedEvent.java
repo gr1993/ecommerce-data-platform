@@ -40,6 +40,8 @@ public class OrderCreatedEvent {
 		private Long skuId;
 		private String productName;
 		private String productCode;
+		private Long categoryId;
+		private String categoryName;
 		private Integer quantity;
 		private BigDecimal unitPrice;
 		private BigDecimal totalPrice;
