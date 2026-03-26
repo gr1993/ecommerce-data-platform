@@ -87,3 +87,31 @@ AS SELECT
     count(DISTINCT order_id) as order_count
 FROM default.order_item_fact
 GROUP BY sale_date, category_id, category_name;
+
+
+-- 대시보드용 일별/상품별 매출 집계 (Materialized View)
+CREATE MATERIALIZED VIEW IF NOT EXISTS default.daily_product_revenue_mv
+ENGINE = SummingMergeTree()
+ORDER BY (sale_date, product_id, product_name)
+AS SELECT
+    toDate(ordered_at) as sale_date,
+    product_id,
+    product_name,
+    sum(total_price) as daily_revenue,
+    sum(quantity) as daily_quantity
+FROM default.order_item_fact
+WHERE status = 'CONFIRMED'
+GROUP BY sale_date, product_id, product_name;
+
+
+-- 대시보드용 일별 클레임(취소/반품) 집계 (Materialized View)
+CREATE MATERIALIZED VIEW IF NOT EXISTS default.daily_claim_stats_mv
+ENGINE = SummingMergeTree()
+ORDER BY (sale_date)
+AS SELECT
+    toDate(ordered_at) as sale_date,
+    count() as daily_claim_count,
+    sum(total_price) as daily_claim_amount
+FROM default.order_item_fact
+WHERE status = 'CANCELLED'
+GROUP BY sale_date;
