@@ -1,19 +1,22 @@
 import { useState, useEffect } from 'react'
-import { Card, Row, Col, DatePicker, Select, Button, Space } from 'antd'
+import { Card, Row, Col, DatePicker, Select, Button, Space, message } from 'antd'
 import { Column, Line, Pie } from '@ant-design/charts'
 import { SearchOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import './AdminRevenueStatistics.css'
+import { analyticsApi } from '../../../api/analyticsApi'
 
 const { RangePicker } = DatePicker
 const { Option } = Select
 
 interface CategoryRevenue {
+  category_id: number
   category_name: string
   revenue: number
 }
 
 interface ProductRevenue {
+  product_id: number
   product_name: string
   revenue: number
 }
@@ -39,48 +42,44 @@ function AdminRevenueStatistics() {
   const [productRevenue, setProductRevenue] = useState<ProductRevenue[]>([])
   const [revenueTrend, setRevenueTrend] = useState<RevenueTrend[]>([])
   const [returnExchangeStats, setReturnExchangeStats] = useState<ReturnExchangeStats[]>([])
+  const [loading, setLoading] = useState<boolean>(false)
 
-  // 매출 통계 데이터 로드 (샘플 데이터)
+  const fetchStats = async () => {
+    setLoading(true)
+    const startDate = dateRange[0].format('YYYY-MM-DD')
+    const endDate = dateRange[1].format('YYYY-MM-DD')
+
+    try {
+      // 카테고리 통계만 실제 API 호출
+      const catData = await analyticsApi.getCategoryStats(startDate, endDate)
+      setCategoryRevenue(catData)
+
+      // 나머지는 일단 샘플 데이터 유지
+      setProductRevenue([
+        { product_id: 1, product_name: '노트북', revenue: 50000000 },
+        { product_id: 2, product_name: '스마트폰', revenue: 40000000 },
+        { product_id: 3, product_name: '태블릿', revenue: 30000000 }
+      ])
+      setRevenueTrend([
+        { date: '2024-01-01', revenue: 5000000 },
+        { date: '2024-01-02', revenue: 5500000 }
+      ])
+      setReturnExchangeStats([
+        { type: '반품', count: 25, amount: 5000000 },
+        { type: '교환', count: 15, amount: 3000000 }
+      ])
+    } catch (error) {
+      console.error('통계 데이터 로딩 실패:', error)
+      message.error('통계 데이터를 불러오는데 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // 매출 통계 데이터 로드
   useEffect(() => {
-    // TODO: API 호출로 매출 통계 데이터 로드
-    setCategoryRevenue([
-      { category_name: '전자제품', revenue: 150000000 },
-      { category_name: '의류', revenue: 80000000 },
-      { category_name: '도서', revenue: 30000000 },
-      { category_name: '식품', revenue: 50000000 },
-      { category_name: '기타', revenue: 40000000 }
-    ])
-
-    setProductRevenue([
-      { product_name: '노트북', revenue: 50000000 },
-      { product_name: '스마트폰', revenue: 40000000 },
-      { product_name: '태블릿', revenue: 30000000 },
-      { product_name: '이어폰', revenue: 20000000 },
-      { product_name: '마우스', revenue: 10000000 }
-    ])
-
-    setRevenueTrend([
-      { date: '2024-01-01', revenue: 5000000 },
-      { date: '2024-01-02', revenue: 5500000 },
-      { date: '2024-01-03', revenue: 6000000 },
-      { date: '2024-01-04', revenue: 6500000 },
-      { date: '2024-01-05', revenue: 7000000 },
-      { date: '2024-01-06', revenue: 7500000 },
-      { date: '2024-01-07', revenue: 8000000 },
-      { date: '2024-01-08', revenue: 7800000 },
-      { date: '2024-01-09', revenue: 8200000 },
-      { date: '2024-01-10', revenue: 8500000 },
-      { date: '2024-01-11', revenue: 8800000 },
-      { date: '2024-01-12', revenue: 9000000 },
-      { date: '2024-01-13', revenue: 9200000 },
-      { date: '2024-01-14', revenue: 9500000 }
-    ])
-
-    setReturnExchangeStats([
-      { type: '반품', count: 25, amount: 5000000 },
-      { type: '교환', count: 15, amount: 3000000 }
-    ])
-  }, [dateRange, periodType])
+    fetchStats()
+  }, [])
 
   const handleDateRangeChange = (dates: any) => {
     if (dates) {
@@ -89,8 +88,7 @@ function AdminRevenueStatistics() {
   }
 
   const handleSearch = () => {
-    // TODO: API 호출로 필터링된 데이터 조회
-    console.log('검색:', dateRange, periodType)
+    fetchStats()
   }
 
   const categoryRevenueConfig = {
