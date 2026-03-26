@@ -50,24 +50,17 @@ function AdminRevenueStatistics() {
     const endDate = dateRange[1].format('YYYY-MM-DD')
 
     try {
-      // 카테고리 통계만 실제 API 호출
-      const catData = await analyticsApi.getCategoryStats(startDate, endDate)
-      setCategoryRevenue(catData)
+      const [catData, prodData, trendData, claimData] = await Promise.all([
+        analyticsApi.getCategoryStats(startDate, endDate),
+        analyticsApi.getProductStats(startDate, endDate),
+        analyticsApi.getRevenueTrend(startDate, endDate, periodType),
+        analyticsApi.getClaimStats(startDate, endDate)
+      ])
 
-      // 나머지는 일단 샘플 데이터 유지
-      setProductRevenue([
-        { product_id: 1, product_name: '노트북', revenue: 50000000 },
-        { product_id: 2, product_name: '스마트폰', revenue: 40000000 },
-        { product_id: 3, product_name: '태블릿', revenue: 30000000 }
-      ])
-      setRevenueTrend([
-        { date: '2024-01-01', revenue: 5000000 },
-        { date: '2024-01-02', revenue: 5500000 }
-      ])
-      setReturnExchangeStats([
-        { type: '반품', count: 25, amount: 5000000 },
-        { type: '교환', count: 15, amount: 3000000 }
-      ])
+      setCategoryRevenue(catData)
+      setProductRevenue(prodData)
+      setRevenueTrend(trendData)
+      setReturnExchangeStats(claimData)
     } catch (error) {
       console.error('통계 데이터 로딩 실패:', error)
       message.error('통계 데이터를 불러오는데 실패했습니다.')
@@ -79,7 +72,7 @@ function AdminRevenueStatistics() {
   // 매출 통계 데이터 로드
   useEffect(() => {
     fetchStats()
-  }, [])
+  }, [periodType]) // periodType 변경 시에도 재조회
 
   const handleDateRangeChange = (dates: any) => {
     if (dates) {
