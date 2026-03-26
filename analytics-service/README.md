@@ -17,7 +17,7 @@ ClickHouse에 적재하고, 이후 모든 집계 및 조회는 ClickHouse에서 
 * [ClickHouse 정리 블로그](https://little-pecorino-c28.notion.site/ClickHouse-32d82094ef0a805f879bfe3b97967611)
 
 
-## ClickHouse
+### ClickHouse
 ksqlDB를 활용해 데이터를 ClickHouse에 적합한 형태로 가공한 뒤, 별도의 Kafka Connector나  
 Kafka Consumer를 두지 않고 **ClickHouse의 Kafka Engine을 통해 Kafka 토픽을 직접 구독**하여  
 데이터를 Insert하도록 구현할 예정이다.  
@@ -29,7 +29,7 @@ ClickHouse는 전통적인 RDBMS와 구조적 특성이 크게 다르기 때문�
 데 유리하다. 이러한 특성을 고려하여 본 시스템에서는 **Wide Table 기반으로 스키마를 설계**하였다.  
 
 
-## 매출 통계
+### 매출 통계
 매출 통계는 [event-bot](https://github.com/gr1993/ecommerce-data-platform/tree/main/event-bot)에서 정산 서비스 개발 시 사용했던 정산 이벤트 발생기를 활용하면, 주문 데이터에  
 상품 및 카테고리 정보가 함께 포함되기 때문에 별도의 이벤트 발생기 없이도 매출 통계 화면에 필요한 카테고리별  
 매출, 상품별 매출, 기간별 매출 추이 등의 정보를 제공할 수 있다.  
@@ -42,4 +42,11 @@ ClickHouse는 전통적인 RDBMS와 구조적 특성이 크게 다르기 때문�
 이번에는 **ksqlDB를 활용한 실시간 ETL 처리 방식을 선택하여 데이터를 수집**하기로 결정하였다.  
 
 
-## 대시보드
+### 대시보드
+
+
+### 백엔드 기술
+* Spring Boot 3.5.11 (JDK 17)
+* spring-boot-starter-web
+* spring-boot-starter-jdbc : Spring의 표준 JDBC 추상화 및 커넥션 풀 제공
+* clickhouse-jdbc : ClickHouse 통신 프로토콜을 구현한 공식 JDBC 드라이버

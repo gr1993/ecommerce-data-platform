@@ -1,0 +1,15 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: analytics-service
+
+  datasource:
+    url: jdbc:clickhouse://localhost:8123/default
+    driver-class-name: com.clickhouse.jdbc.ClickHouseDriver
+    username: admin
+    password: admin123
+
+  jackson:
+    property-naming-strategy: SNAKE_CASE
