@@ -4,12 +4,16 @@ import com.example.eventbot.domain.event.UserRegisteredEvent;
 import com.example.eventbot.domain.event.InventoryChangedEvent;
 import com.example.eventbot.domain.event.PageViewedEvent;
 import com.example.eventbot.dto.response.EventGeneratorResponse;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
@@ -22,6 +26,55 @@ public class EventGeneratorService {
     private final KafkaProducerService kafkaProducerService;
     private final Random random = new Random();
     private final AtomicBoolean running = new AtomicBoolean(false);
+
+    // 상품 마스터 데이터
+    @Getter
+    @AllArgsConstructor
+    private static class ProductMaster {
+        private final Long productId;
+        private final String productName;
+    }
+
+    private static final List<ProductMaster> PRODUCT_MASTERS = Arrays.asList(
+        new ProductMaster(1001L, "오버핏 맨투맨"),
+        new ProductMaster(1002L, "슬림핏 슬랙스"),
+        new ProductMaster(1003L, "데일리 캔버스화"),
+        new ProductMaster(2001L, "노이즈캔슬링 헤드폰"),
+        new ProductMaster(2002L, "4K 게이밍 모니터"),
+        new ProductMaster(2003L, "기계식 키보드"),
+        new ProductMaster(3001L, "유기농 샐러드 도시락"),
+        new ProductMaster(3002L, "프리미엄 원두 커피"),
+        new ProductMaster(3003L, "닭가슴살 패키지"),
+        new ProductMaster(4001L, "수분 진정 크림"),
+        new ProductMaster(4002L, "롱래스팅 립스틱"),
+        new ProductMaster(4003L, "저자극 클렌징 폼"),
+        new ProductMaster(5001L, "요가 매트 8mm"),
+        new ProductMaster(5002L, "경량 러닝화"),
+        new ProductMaster(5003L, "단백질 쉐이커")
+    );
+
+    private static final List<String> PAGE_URLS = Arrays.asList(
+        "/products/category/fashion",
+        "/products/category/electronics",
+        "/products/category/food",
+        "/products/category/beauty",
+        "/products/category/sports",
+        "/products/1001",
+        "/products/1002",
+        "/products/2001",
+        "/products/2002",
+        "/products/3001",
+        "/products/4001",
+        "/products/5002",
+        "/cart",
+        "/checkout",
+        "/mypage/orders",
+        "/search?q=헤드폰",
+        "/search?q=운동화",
+        "/",
+        "/events/spring-sale",
+        "/best-sellers"
+    );
     
     // UI 한글 라벨 매핑을 위해 ConcurrentHashMap 사용
     private final Map<String, Long> eventCounts = new ConcurrentHashMap<>();
@@ -81,9 +134,10 @@ public class EventGeneratorService {
                         kafkaProducerService.publishUserRegistered(event);
                         eventCounts.merge(REG_LABEL, 1L, Long::sum);
                     } else if (type == 1) { // 재고변동
+                        ProductMaster product = PRODUCT_MASTERS.get(random.nextInt(PRODUCT_MASTERS.size()));
                         InventoryChangedEvent event = InventoryChangedEvent.builder()
-                                .productId(random.nextLong(500) + 1)
-                                .productName("DUMMY_PRODUCT_" + random.nextInt(100))
+                                .productId(product.getProductId())
+                                .productName(product.getProductName())
                                 .changeAmount(random.nextInt(10) - 5) // -5 ~ +4
                                 .currentStock(random.nextInt(100) + 10)
                                 .changedAt(LocalDateTime.now())
@@ -93,7 +147,7 @@ public class EventGeneratorService {
                     } else { // 페이지뷰
                         PageViewedEvent event = PageViewedEvent.builder()
                                 .userId(random.nextLong(10000) + 1)
-                                .pageUrl("/api/v1/dummy-page/" + random.nextInt(50))
+                                .pageUrl(PAGE_URLS.get(random.nextInt(PAGE_URLS.size())))
                                 .userAgent("Mozilla/5.0")
                                 .viewedAt(LocalDateTime.now())
                                 .build();
