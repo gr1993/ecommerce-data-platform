@@ -41,11 +41,27 @@ ecommerce-data-platform/
 # 로컬 개발용 인프라 구축
 docker-compose -f infra/docker-compose.dev.yml up -d
 
+
 # Kafka
+helm repo add strimzi https://strimzi.io/charts/
+helm repo update
+kubectl create namespace kafka
+helm install strimzi-operator strimzi/strimzi-kafka-operator -n kafka
+
 kubectl apply -f infra/platforms/kafka/kafka-cluster.yaml -n kafka
 kubectl apply -f infra/platforms/kafka/kafka-ui.yaml -n kafka
 # Kafka UI 연결
 kubectl port-forward svc/kafka-ui -n kafka 8090:80
+
+
+# postgres
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo update
+
+helm install postgres bitnami/postgresql -f infra/platforms/postgres/postgres-values.yaml
+# 호스트에서 DB 접근 시 연결
+kubectl port-forward svc/postgres-postgresql 5432:5432
+
 ```
 
 

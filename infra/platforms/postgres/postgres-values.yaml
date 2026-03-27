@@ -1,0 +1,23 @@
+auth:
+  postgresPassword: "123123"
+
+primary:
+  resources:
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+    requests:
+      cpu: "250m"
+      memory: "256Mi"
+
+  # 데이터 영속성 (Minikube 기본 스토리지 사용)
+  persistence:
+    enabled: true
+    size: 8Gi
+    # Minikube 재시작 시에도 데이터를 유지하려면 'standard' 사용
+    storageClass: "standard"
+
+service:
+  type: ClusterIP
+  ports:
+    postgresql: 5432
