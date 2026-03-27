@@ -49,16 +49,13 @@ public class EventStatsRepository {
         return result != null ? result : 0L;
     }
 
-    /**
-     * 오늘 순 방문자 수 (Unique Visitors).
-     * AggregatingMergeTree이므로 FINAL + uniqMerge() 사용.
-     */
+    /** 오늘 순 방문자 수 (SummingMergeTree 방식) */
     public long getTodayVisitors() {
         String sql = """
-                SELECT uniqMerge(unique_visitor_count)
-                FROM default.daily_visitor_stats_mv FINAL
-                WHERE log_date = today()
-                """;
+            SELECT SUM(unique_visitor_count)
+            FROM default.daily_visitor_stats_mv
+            WHERE log_date = today()
+            """;
         Long result = jdbcTemplate.queryForObject(sql, Long.class);
         return result != null ? result : 0L;
     }
@@ -66,10 +63,10 @@ public class EventStatsRepository {
     /** 이번 주(월~일) 순 방문자 수 */
     public long getWeekVisitors() {
         String sql = """
-                SELECT uniqMerge(unique_visitor_count)
-                FROM default.daily_visitor_stats_mv FINAL
-                WHERE log_date >= toMonday(today())
-                """;
+            SELECT SUM(unique_visitor_count)
+            FROM default.daily_visitor_stats_mv
+            WHERE log_date >= toMonday(today())
+            """;
         Long result = jdbcTemplate.queryForObject(sql, Long.class);
         return result != null ? result : 0L;
     }

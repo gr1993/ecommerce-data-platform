@@ -151,14 +151,13 @@ AS SELECT
     now()                              AS created_at
 FROM default.page_viewed_kafka;
 
--- 집계 MV: 일별 총 페이지 뷰 & 순 방문자 수 (AggregatingMergeTree + uniqState)
--- 조회 시: SELECT log_date, countMerge(total_page_views), uniqMerge(unique_visitor_count) ... FINAL
+-- 집계 MV: 일별 총 페이지 뷰 & 순 방문자 수
 CREATE MATERIALIZED VIEW IF NOT EXISTS default.daily_visitor_stats_mv
-ENGINE = AggregatingMergeTree()
+ENGINE = SummingMergeTree()
 ORDER BY (log_date)
 AS SELECT
-    toDate(viewed_at)       AS log_date,
-    countState()            AS total_page_views,
-    uniqState(user_id)      AS unique_visitor_count
+    toDate(viewed_at)   AS log_date,
+    count()             AS total_page_views,
+    uniq(user_id)       AS unique_visitor_count
 FROM default.page_viewed_raw
 GROUP BY log_date;
