@@ -38,6 +38,8 @@ public class OrderCancelledEvent {
 		private Long skuId;
 		private String productName;
 		private String productCode;
+		private Long categoryId;
+		private String categoryName;
 		private Integer quantity;  // 복구할 재고 수량
 		private BigDecimal unitPrice;
 		private BigDecimal totalPrice;
