@@ -8,20 +8,12 @@
 ### 디렉터리 구조
 ```
 ecommerce-data-platform/
-└── infra/                  # 쿠버네티스 매니페스트 (IaC 전용)
-    ├── k8s-clusters/       # 클러스터 공통 설정
-    │   ├── storage-class.yaml
-    │   └── namespaces.yaml
-    ├── helm-values/        # Helm 차트의 설정값(values.yaml) 모음
-    │   ├── strimzi-operator.yaml
-    │   └── kafka-cluster.yaml
+└── infra/                  
     ├── platforms/          # 공통 인프라 (Stateful 기반)
+    │   ├── clickhouse/
     │   ├── kafka/
-    │   │   ├── statefulset.yaml
-    │   │   ├── service.yaml
-    │   │   └── configmap.yaml
-    │   ├── postgres/
-    │   └── clickhouse/
+    │   ├── ksqldb/
+    │   └── postgres/
     └── apps/               # 비즈니스 마이크로서비스 (Stateless 기반)
         ├── order-service.yaml
         ├── payment-service.yaml
@@ -64,6 +56,11 @@ helm install postgres bitnami/postgresql -f infra/platforms/postgres/postgres-va
 # 호스트에서 DB 접근 시 연결
 kubectl port-forward svc/postgres-postgresql 5432:5432
 
+
+# clickhouse
+kubectl apply -f infra/platforms/clickhouse/clickhouse.yaml
+# 호스트에서 DB 접근 시 연결
+kubectl port-forward svc/clickhouse-svc -n clickhouse 8123:8123
 ```
 
 
