@@ -90,8 +90,8 @@ public class StatsRepository {
         String sql = """
             SELECT 
                 '반품' as type, 
-                sum(daily_claim_count) as count, 
-                sum(daily_claim_amount) as amount
+                abs(sum(daily_claim_count)) as count, 
+                abs(sum(daily_claim_amount)) as amount
             FROM default.daily_claim_stats_mv
             WHERE sale_date BETWEEN ? AND ?
             """;

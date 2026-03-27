@@ -30,6 +30,40 @@ ClickHouse는 전통적인 RDBMS와 구조적 특성이 크게 다르기 때문�
 
 
 ### 매출 통계
+
+```mermaid
+graph TD
+    subgraph "Kafka Cluster (Source Topics)"
+        T1[order_created]
+        T2[order_cancelled]
+    end
+
+    subgraph "ksqlDB Processing Layer"
+        S1[order_created_raw Stream]
+        S2[order_cancelled_raw Stream]
+        T1 --> S1
+        T2 --> S2
+
+        S3[analytics_order_item Stream]
+        S1 --> S3
+        S2 --> S3
+        
+        Note[상태 확정 및 데이터 변환 처리<br/>CONFIRMED / CANCELLED] -.-> S3
+    end
+
+    subgraph "Kafka Cluster (Sink Topic)"
+        T3[analytics-order-item Topic]
+        S3 --> T3
+    end
+
+    subgraph "ClickHouse Storage"
+        T3 --> CH[(order_item_fact Table)]
+    end
+
+    style CH fill:#f9f,stroke:#333,stroke-width:2px
+    style S3 fill:#fff4dd,stroke:#d4a017,stroke-width:2px
+```
+
 매출 통계는 [event-bot](https://github.com/gr1993/ecommerce-data-platform/tree/main/event-bot)에서 정산 서비스 개발 시 사용했던 정산 이벤트 발생기를 활용하면, 주문 데이터에  
 상품 및 카테고리 정보가 함께 포함되기 때문에 별도의 이벤트 발생기 없이도 매출 통계 화면에 필요한 카테고리별  
 매출, 상품별 매출, 기간별 매출 추이 등의 정보를 제공할 수 있다.  
@@ -40,6 +74,12 @@ ClickHouse는 전통적인 RDBMS와 구조적 특성이 크게 다르기 때문�
 이벤트를 기준으로 데이터를 저장하면, 정산이 완료된 주문만 반영되므로 지표의 신뢰성을 더욱 높일 수 있다.  
 현재는 정산 관리 메뉴를 통해 데이터 무결성을 별도로 검증할 수 있는 지표가 이미 제공되고 있으므로,  
 이번에는 **ksqlDB를 활용한 실시간 ETL 처리 방식을 선택하여 데이터를 수집**하기로 결정하였다.  
+
+그리고 한 가지 더 고려해야 할 점은, 주문 생성과 주문 취소 상태를 ClickHouse의 order_item_fact  
+테이블에서 관리하고 있다는 것이다. 이를 위해 order-created 토픽과 연결한 order_created_raw  
+스트림과 order-cancelled 토픽과 연결한 order_cancelled_raw 스트림을 각각 생성했으며, 두 스트림에서  
+발생하는 이벤트를 analytics_order_item 스트림으로 변환 후 집계하였다. 이후 상태를 CONFIRMED 또는  
+CANCELLED로 확정한 뒤, 최종적으로 order_item_fact 테이블에 저장할 수 있도록 구조를 설계하였다.  
 
 
 ### 대시보드
