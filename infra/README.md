@@ -52,6 +52,8 @@ kubectl apply -f infra/platforms/kafka/kafka-cluster.yaml -n kafka
 kubectl apply -f infra/platforms/kafka/kafka-ui.yaml -n kafka
 # Kafka UI 연결
 kubectl port-forward svc/kafka-ui -n kafka 8090:80
+# ksqldb
+kubectl apply -f infra/platforms/ksqldb/ksqldb.yaml -n kafka
 
 
 # postgres
