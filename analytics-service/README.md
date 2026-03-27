@@ -84,6 +84,35 @@ CANCELLED로 확정한 뒤, 최종적으로 order_item_fact 테이블에 저장�
 
 ### 대시보드
 
+```mermaid
+graph LR
+    subgraph "Kafka Cluster (Source Topics)"
+        T1((user_registered))
+        T2((inventory_changed))
+        T3((page_viewed))
+    end
+
+    subgraph "ClickHouse (Raw Data Storage)"
+        D1[(user_registered_raw)]
+        D2[(inventory_changed_raw)]
+        D3[(page_viewed_raw)]
+    end
+
+    T1 --> D1
+    T2 --> D2
+    T3 --> D3
+
+    style D1 fill:#f9f9f9,stroke:#333
+    style D2 fill:#f9f9f9,stroke:#333
+    style D3 fill:#fff3e0,stroke:#e65100,stroke-width:2px
+```
+
+대시보드에 표시되는 지표 중 총 주문 수, 일·주·월 매출, 인기 상품 Top N, 매출 추이 그래프는 모두  
+기존 매출 통계 구축 과정에서 수집한 주문 이벤트 파이프라인의 order_item_fact 테이블만으로 충분히  
+제공할 수 있다. 따라서 추가 지표인 신규 회원 수는 회원가입 이벤트를 발행하도록 event-bot에 구현하고,  
+상품 재고 알림 역시 재고 증감 이벤트를 발행하도록 구성하였다. 또한 오늘 및 이번 주 방문자 수는 페이지  
+조회 이벤트를 발행하도록 구현하여 수집하며, 이를 대시보드에 함께 제공하도록 설계하였다.  
+
 
 ### 백엔드 기술
 * Spring Boot 3.5.11 (JDK 17)
