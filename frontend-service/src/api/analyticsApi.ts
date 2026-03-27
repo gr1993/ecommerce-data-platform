@@ -32,6 +32,8 @@ export interface DashboardSummary {
   monthly_revenue: number
   new_members: number
   low_stock_count: number
+  critical_product_name: string   // 재고 가장 부족한 상품명
+  critical_product_stock: number  // 해당 상품 현재 재고 수
   today_visitors: number
   week_visitors: number
 }

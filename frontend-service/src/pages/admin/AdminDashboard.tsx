@@ -11,7 +11,7 @@ const { Option } = Select
 const fmt = (d: Date) => d.toISOString().slice(0, 10)
 const today = fmt(new Date())
 const monthStart = fmt(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
-const twoWeeksAgo = fmt(new Date(Date.now() - 13 * 86_400_000))
+const currentMonth = new Date().getMonth() + 1  // 1-indexed (예: 3)
 
 // ---- 차트용 로컬 타입 ----
 interface PopularProduct {
@@ -27,6 +27,8 @@ function AdminDashboard() {
     monthly_revenue: 0,
     new_members: 0,
     low_stock_count: 0,
+    critical_product_name: '-',
+    critical_product_stock: 0,
     today_visitors: 0,
     week_visitors: 0,
   })
@@ -43,7 +45,7 @@ function AdminDashboard() {
       try {
         const [summary, trend, products] = await Promise.all([
           analyticsApi.getDashboardSummary(),
-          analyticsApi.getRevenueTrend(twoWeeksAgo, today, 'daily'),
+          analyticsApi.getRevenueTrend(monthStart, today, 'daily'),
           analyticsApi.getProductStats(monthStart, today, 15),
         ])
 
@@ -197,11 +199,11 @@ function AdminDashboard() {
             <Card>
               <Badge count={stats.low_stock_count} overflowCount={99}>
                 <Statistic
-                  title="상품 재고 알림"
-                  value={stats.low_stock_count}
+                  title={`${stats.critical_product_name} 재고 알림`}
+                  value={stats.critical_product_stock < 0 ? '-' : stats.critical_product_stock}
                   prefix={<WarningOutlined />}
                   valueStyle={{ color: '#dc3545' }}
-                  suffix="개"
+                  suffix={stats.critical_product_stock >= 0 ? '개' : undefined}
                 />
               </Badge>
             </Card>
@@ -232,7 +234,7 @@ function AdminDashboard() {
         <Row gutter={[16, 16]} style={{ marginTop: '1.5rem' }}>
           <Col xs={24} lg={12}>
             <Card
-              title="인기 상품 Top N"
+              title={`${currentMonth}월 인기 상품 Top N`}
               extra={
                 <Select
                   value={topN}
@@ -250,7 +252,7 @@ function AdminDashboard() {
             </Card>
           </Col>
           <Col xs={24} lg={12}>
-            <Card title="매출 추이 그래프">
+            <Card title={`${currentMonth}월 매출 추이 그래프`}>
               <Line {...revenueTrendConfig} height={300} />
             </Card>
           </Col>
