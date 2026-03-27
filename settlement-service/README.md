@@ -8,6 +8,18 @@ ecommerce-msa에서는 Kafka에 단순 JSON 구조의 레코드를 저장하는 
 Raw 데이터 적재 로직을 처리할 예정이다.  
 
 
+### 이미지 배포
+```shell
+# Docker Hub 로그인
+docker login
+
+# 이미지 빌드
+docker build -t gr1993/settlement:latest .
+# 이미지 저장소에 업로드
+docker push gr1993/settlement:latest
+```
+
+
 ### Reconciliation(대조)
 [event-bot](https://github.com/gr1993/ecommerce-data-platform/tree/main/event-bot)에서는 일부러 결함이 포함된 이벤트를 발생시키도록 구현할 예정이다.  
 예를 들어, 1,000건 중 약 5건은 OrderCreated 이벤트만 발생하고 PaymentConfirmed 이벤트는  
