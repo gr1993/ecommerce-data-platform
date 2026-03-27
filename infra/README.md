@@ -34,7 +34,7 @@ ecommerce-data-platform/
 docker-compose -f infra/docker-compose.dev.yml up -d
 
 
-# Kafka
+# Kafka, Kafka UI, ksqlDB
 helm repo add strimzi https://strimzi.io/charts/
 helm repo update
 kubectl create namespace kafka
@@ -42,24 +42,24 @@ helm install strimzi-operator strimzi/strimzi-kafka-operator -n kafka
 
 kubectl apply -f infra/platforms/kafka/kafka-cluster.yaml -n kafka
 kubectl apply -f infra/platforms/kafka/kafka-ui.yaml -n kafka
-# Kafka UI 연결
-kubectl port-forward svc/kafka-ui -n kafka 8090:80
-# ksqldb
 kubectl apply -f infra/platforms/ksqldb/ksqldb.yaml -n kafka
+# 호스트에서 Kafka UI 접근 시 연결
+kubectl port-forward svc/kafka-ui -n kafka 8090:80
 
 
 # postgres
 helm repo add bitnami https://charts.bitnami.com/bitnami
 helm repo update
+kubectl create namespace postgres
 
-helm install postgres bitnami/postgresql -f infra/platforms/postgres/postgres-values.yaml
-# 호스트에서 DB 접근 시 연결
+helm install postgres bitnami/postgresql -f infra/platforms/postgres/postgres-values.yaml -n postgres
+# 호스트에서 postgres 접근 시 연결
 kubectl port-forward svc/postgres-postgresql 5432:5432
 
 
 # clickhouse
 kubectl apply -f infra/platforms/clickhouse/clickhouse.yaml
-# 호스트에서 DB 접근 시 연결
+# 호스트에서 clickhouse 접근 시 연결
 kubectl port-forward svc/clickhouse-svc -n clickhouse 8123:8123
 ```
 
@@ -69,8 +69,21 @@ kubectl port-forward svc/clickhouse-svc -n clickhouse 8123:8123
 아래는 Kafka 클러스터가 구축되고 난 후 파티션 수를 지정하기 위해 직접 토픽 생성 명령어를 실행하였다.
 
 ```shell
-docker exec -it kafka1 kafka-topics --create --topic order.created --bootstrap-server kafka1:9091 --partitions 3 --replication-factor 3
-docker exec -it kafka1 kafka-topics --create --topic order.cancelled --bootstrap-server kafka1:9091 --partitions 3 --replication-factor 3
-docker exec -it kafka1 kafka-topics --create --topic payment.confirmed --bootstrap-server kafka1:9091 --partitions 3 --replication-factor 3
-docker exec -it kafka1 kafka-topics --create --topic payment.cancelled --bootstrap-server kafka1:9091 --partitions 3 --replication-factor 3
+# 로컬에서 토픽 생성
+docker exec -it kafka1 kafka-topics --create --topic order-created --bootstrap-server kafka1:9091 --partitions 3 --replication-factor 3
+docker exec -it kafka1 kafka-topics --create --topic order-cancelled --bootstrap-server kafka1:9091 --partitions 3 --replication-factor 3
+docker exec -it kafka1 kafka-topics --create --topic payment-confirmed --bootstrap-server kafka1:9091 --partitions 3 --replication-factor 3
+docker exec -it kafka1 kafka-topics --create --topic payment-cancelled --bootstrap-server kafka1:9091 --partitions 3 --replication-factor 3
+docker exec -it kafka1 kafka-topics --create --topic user_registered --bootstrap-server kafka1:9091 --partitions 3 --replication-factor 3
+docker exec -it kafka1 kafka-topics --create --topic inventory_changed --bootstrap-server kafka1:9091 --partitions 3 --replication-factor 3
+docker exec -it kafka1 kafka-topics --create --topic page_viewed --bootstrap-server kafka1:9091 --partitions 3 --replication-factor 3
+
+# 쿠버네티스에서 토픽 생성
+kubectl exec -it my-cluster-kafka-nodes-0 -n kafka -- /opt/kafka/bin/kafka-topics.sh --create --topic order-created --bootstrap-server my-cluster-kafka-bootstrap:9092 --partitions 3 --replication-factor 1
+kubectl exec -it my-cluster-kafka-nodes-0 -n kafka -- /opt/kafka/bin/kafka-topics.sh --create --topic order-cancelled --bootstrap-server my-cluster-kafka-bootstrap:9092 --partitions 3 --replication-factor 1
+kubectl exec -it my-cluster-kafka-nodes-0 -n kafka -- /opt/kafka/bin/kafka-topics.sh --create --topic payment-confirmed --bootstrap-server my-cluster-kafka-bootstrap:9092 --partitions 3 --replication-factor 1
+kubectl exec -it my-cluster-kafka-nodes-0 -n kafka -- /opt/kafka/bin/kafka-topics.sh --create --topic payment-cancelled --bootstrap-server my-cluster-kafka-bootstrap:9092 --partitions 3 --replication-factor 1
+kubectl exec -it my-cluster-kafka-nodes-0 -n kafka -- /opt/kafka/bin/kafka-topics.sh --create --topic user_registered --bootstrap-server my-cluster-kafka-bootstrap:9092 --partitions 3 --replication-factor 1
+kubectl exec -it my-cluster-kafka-nodes-0 -n kafka -- /opt/kafka/bin/kafka-topics.sh --create --topic inventory_changed --bootstrap-server my-cluster-kafka-bootstrap:9092 --partitions 3 --replication-factor 1
+kubectl exec -it my-cluster-kafka-nodes-0 -n kafka -- /opt/kafka/bin/kafka-topics.sh --create --topic page_viewed --bootstrap-server my-cluster-kafka-bootstrap:9092 --partitions 3 --replication-factor 1
 ```
