@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>랜덤 이벤트 발생기 - 관리자</title>
+    <style>
+        body { font-family: 'Pretendard', sans-serif; margin: 40px; background-color: #f8f9fa; color: #333; }
+        .container { max-width: 700px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        .nav-back { margin-bottom: 20px; display: inline-block; text-decoration: none; color: #3498db; font-weight: bold; }
+        h1 { color: #2c3e50; margin-top: 0; padding-bottom: 15px; border-bottom: 2px solid #f1f3f5; }
+        .status-box { padding: 15px; border-radius: 8px; font-weight: bold; margin-bottom: 25px; display: flex; align-items: center; justify-content: space-between; }
+        .status-box.running { background-color: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+        .status-box.idle { background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+        .actions { display: flex; gap: 12px; margin-top: 25px; }
+        button { flex: 1; padding: 12px; border: none; border-radius: 6px; cursor: pointer; color: white; font-weight: bold; font-size: 1rem; transition: background 0.2s; }
+        .btn-start { background-color: #2ecc71; }
+        .btn-start:hover { background-color: #27ae60; }
+        .btn-stop { background-color: #e74c3c; }
+        .btn-stop:hover { background-color: #c0392b; }
+        
+        .event-counts { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
+        .count-card { background: #f8f9fa; border: 1px solid #e9ecef; padding: 15px; border-radius: 8px; text-align: center; }
+        .count-label { font-size: 0.85rem; color: #6c757d; margin-bottom: 5px; }
+        .count-value { font-size: 1.5rem; font-weight: 800; color: #2c3e50; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="nav-back">← 대시보드로 돌아가기</a>
+        <h1>랜덤 이벤트 발생기</h1>
+        
+        <div id="statusBox" class="status-box idle">
+            <span>현재 상태: <strong id="statusText">대기 중</strong></span>
+        </div>
+
+        <div class="event-counts" id="countsContainer">
+            <!-- JavaScript will populate this -->
+        </div>
+
+        <div class="actions">
+            <button class="btn-start" onclick="startGeneration()">발생기 시작</button>
+            <button class="btn-stop" onclick="stopGeneration()">발생기 중단</button>
+        </div>
+    </div>
+
+    <script>
+        function updateStatus() {
+            fetch('/events/status')
+                .then(response => response.json())
+                .then(data => {
+                    const statusBox = document.getElementById('statusBox');
+                    const statusText = document.getElementById('statusText');
+                    
+                    if (data.running) {
+                        statusBox.className = 'status-box running';
+                        statusText.innerText = '이벤트 발생 중';
+                    } else {
+                        statusBox.className = 'status-box idle';
+                        statusText.innerText = '대기 중';
+                    }
+
+                    const countsContainer = document.getElementById('countsContainer');
+                    countsContainer.innerHTML = '';
+                    
+                    // 정렬하여 표시
+                    Object.entries(data.counts)
+                        .sort((a, b) => a[0].localeCompare(b[0]))
+                        .forEach(([type, count]) => {
+                            const card = document.createElement('div');
+                            card.className = 'count-card';
+                            card.innerHTML = `
+                                <div class="count-label">${type}</div>
+                                <div class="count-value">${count.toLocaleString()}</div>
+                            `;
+                            countsContainer.appendChild(card);
+                        });
+                });
+        }
+
+        function startGeneration() {
+            fetch('/events/start', { method: 'POST' })
+                .then(() => updateStatus());
+        }
+
+        function stopGeneration() {
+            fetch('/events/stop', { method: 'POST' })
+                .then(() => updateStatus());
+        }
+
+        setInterval(updateStatus, 1000);
+        updateStatus();
+    </script>
+</body>
+</html>
