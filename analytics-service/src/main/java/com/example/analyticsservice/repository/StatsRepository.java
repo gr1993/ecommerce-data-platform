@@ -102,4 +102,17 @@ public class StatsRepository {
             rs.getBigDecimal("amount") == null ? java.math.BigDecimal.ZERO : rs.getBigDecimal("amount")
         ), startDate, endDate);
     }
+
+    /**
+     * 전체 누적 주문 수 (상태 무관, 중복 제거).
+     * order_item_fact에서 날짜 제한 없이 distinct order_id를 카운트한다.
+     */
+    public long getTotalOrderCount() {
+        String sql = """
+            SELECT count(DISTINCT order_id)
+            FROM default.order_item_fact
+            """;
+        Long result = jdbcTemplate.queryForObject(sql, Long.class);
+        return result != null ? result : 0L;
+    }
 }

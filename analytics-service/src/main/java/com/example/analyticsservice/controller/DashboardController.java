@@ -9,7 +9,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.temporal.TemporalAdjusters;
 
 /**
  * AdminDashboard 전용 통합 요약 API.
@@ -31,40 +33,28 @@ public class DashboardController {
 
     @GetMapping("/summary")
     public DashboardSummaryDto getSummary() {
-        LocalDate today = LocalDate.now();
-        LocalDate weekStart = today.minusDays(6);   // 최근 7일
+        LocalDate today      = LocalDate.now();
+        LocalDate weekStart  = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         LocalDate monthStart = today.withDayOfMonth(1);
 
-        // --- 주문 지표 (order_item_fact 기반) ---
-        BigDecimal dailyRevenue = statsRepository
-                .getRevenueTrend(today, today, "daily")
-                .stream()
-                .map(r -> r.revenue())
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // --- 매출 지표 ---
+        BigDecimal dailyRevenue   = sumRevenue(statsRepository, today, today);
+        BigDecimal weeklyRevenue  = sumRevenue(statsRepository, weekStart, today);
+        BigDecimal monthlyRevenue = sumRevenue(statsRepository, monthStart, today);
 
-        BigDecimal weeklyRevenue = statsRepository
-                .getRevenueTrend(weekStart, today, "daily")
-                .stream()
-                .map(r -> r.revenue())
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal monthlyRevenue = statsRepository
-                .getRevenueTrend(monthStart, today, "daily")
-                .stream()
-                .map(r -> r.revenue())
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        long totalOrders = statsRepository
-                .getCategoryRevenue(monthStart, today)
-                .stream()
-                .mapToLong(r -> r.orderCount())
-                .sum();
+        // --- 총 주문 수 (전체 누적) ---
+        long totalOrders = statsRepository.getTotalOrderCount();
 
         // --- 이벤트 기반 지표 ---
         long newMembers    = eventStatsRepository.getTodaySignupCount();
         long lowStockCount = eventStatsRepository.getLowStockCount();
         long todayVisitors = eventStatsRepository.getTodayVisitors();
         long weekVisitors  = eventStatsRepository.getWeekVisitors();
+
+        // --- 재고 가장 부족한 상품 ---
+        var critical = eventStatsRepository.getMostCriticalProduct();
+        String criticalProductName  = critical.map(p -> p.productName()).orElse("-");
+        int    criticalProductStock = critical.map(p -> p.currentStock()).orElse(-1);
 
         return new DashboardSummaryDto(
                 totalOrders,
@@ -73,8 +63,17 @@ public class DashboardController {
                 monthlyRevenue,
                 newMembers,
                 lowStockCount,
+                criticalProductName,
+                criticalProductStock,
                 todayVisitors,
                 weekVisitors
         );
+    }
+
+    private BigDecimal sumRevenue(StatsRepository repo, LocalDate from, LocalDate to) {
+        return repo.getRevenueTrend(from, to, "daily")
+                .stream()
+                .map(r -> r.revenue())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 }

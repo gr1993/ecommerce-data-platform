@@ -131,4 +131,26 @@ public class EventStatsRepository {
                 rs.getInt("current_stock")
         ));
     }
+
+    /**
+     * 재고가 가장 부족한 상품 1개 (카드 타이틀용).
+     * 재고 없으면 Optional.empty() 반환.
+     */
+    public java.util.Optional<LowStockDto> getMostCriticalProduct() {
+        String sql = """
+                SELECT
+                    product_id,
+                    product_name,
+                    current_stock
+                FROM default.current_inventory_mv FINAL
+                ORDER BY current_stock ASC
+                LIMIT 1
+                """;
+        List<LowStockDto> result = jdbcTemplate.query(sql, (rs, rowNum) -> new LowStockDto(
+                rs.getLong("product_id"),
+                rs.getString("product_name"),
+                rs.getInt("current_stock")
+        ));
+        return result.isEmpty() ? java.util.Optional.empty() : java.util.Optional.of(result.get(0));
+    }
 }
