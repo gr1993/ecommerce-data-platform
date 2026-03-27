@@ -1,89 +1,73 @@
 import { useState, useEffect } from 'react'
-import { Card, Row, Col, Statistic, Badge, Select, Space } from 'antd'
+import { Card, Row, Col, Statistic, Badge, Select, Spin, Alert } from 'antd'
 import { ShoppingOutlined, DollarOutlined, UserAddOutlined, WarningOutlined, EyeOutlined } from '@ant-design/icons'
 import { Column, Line } from '@ant-design/charts'
+import { analyticsApi, type DashboardSummary, type ProductRevenue, type RevenueTrend } from '../../api/analyticsApi'
 import './AdminDashboard.css'
 
 const { Option } = Select
 
-interface DashboardStats {
-  totalOrders: number
-  dailyRevenue: number
-  weeklyRevenue: number
-  monthlyRevenue: number
-  newMembers: number
-  lowStockCount: number
-  todayVisitors: number
-  weekVisitors: number
-}
+// ---- 날짜 helpers ----
+const fmt = (d: Date) => d.toISOString().slice(0, 10)
+const today = fmt(new Date())
+const monthStart = fmt(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
+const twoWeeksAgo = fmt(new Date(Date.now() - 13 * 86_400_000))
 
+// ---- 차트용 로컬 타입 ----
 interface PopularProduct {
   product_name: string
   sales_count: number
 }
 
-interface RevenueTrend {
-  date: string
-  revenue: number
-}
-
 function AdminDashboard() {
-  const [stats, setStats] = useState<DashboardStats>({
-    totalOrders: 0,
-    dailyRevenue: 0,
-    weeklyRevenue: 0,
-    monthlyRevenue: 0,
-    newMembers: 0,
-    lowStockCount: 0,
-    todayVisitors: 0,
-    weekVisitors: 0
+  const [stats, setStats] = useState<DashboardSummary>({
+    total_orders: 0,
+    daily_revenue: 0,
+    weekly_revenue: 0,
+    monthly_revenue: 0,
+    new_members: 0,
+    low_stock_count: 0,
+    today_visitors: 0,
+    week_visitors: 0,
   })
   const [popularProducts, setPopularProducts] = useState<PopularProduct[]>([])
   const [revenueTrend, setRevenueTrend] = useState<RevenueTrend[]>([])
   const [topN, setTopN] = useState<number>(5)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  // 대시보드 데이터 로드 (샘플 데이터)
   useEffect(() => {
-    // TODO: API 호출로 대시보드 데이터 로드
-    setStats({
-      totalOrders: 1250,
-      dailyRevenue: 2500000,
-      weeklyRevenue: 15000000,
-      monthlyRevenue: 65000000,
-      newMembers: 45,
-      lowStockCount: 8,
-      todayVisitors: 320,
-      weekVisitors: 2150
-    })
+    const fetchAll = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const [summary, trend, products] = await Promise.all([
+          analyticsApi.getDashboardSummary(),
+          analyticsApi.getRevenueTrend(twoWeeksAgo, today, 'daily'),
+          analyticsApi.getProductStats(monthStart, today, 15),
+        ])
 
-    setPopularProducts([
-      { product_name: '노트북', sales_count: 125 },
-      { product_name: '스마트폰', sales_count: 98 },
-      { product_name: '태블릿', sales_count: 76 },
-      { product_name: '이어폰', sales_count: 65 },
-      { product_name: '마우스', sales_count: 54 },
-      { product_name: '키보드', sales_count: 43 },
-      { product_name: '모니터', sales_count: 32 },
-      { product_name: '웹캠', sales_count: 28 }
-    ])
+        setStats(summary)
 
-    setRevenueTrend([
-      { date: '2024-01-01', revenue: 1200000 },
-      { date: '2024-01-02', revenue: 1500000 },
-      { date: '2024-01-03', revenue: 1800000 },
-      { date: '2024-01-04', revenue: 2200000 },
-      { date: '2024-01-05', revenue: 2500000 },
-      { date: '2024-01-06', revenue: 2800000 },
-      { date: '2024-01-07', revenue: 3000000 },
-      { date: '2024-01-08', revenue: 3200000 },
-      { date: '2024-01-09', revenue: 2900000 },
-      { date: '2024-01-10', revenue: 3100000 },
-      { date: '2024-01-11', revenue: 3300000 },
-      { date: '2024-01-12', revenue: 3500000 },
-      { date: '2024-01-13', revenue: 3400000 },
-      { date: '2024-01-14', revenue: 3600000 }
-    ])
+        setRevenueTrend(trend.map((r) => ({ date: r.date, revenue: Number(r.revenue) })))
+
+        setPopularProducts(
+          (products as ProductRevenue[]).map((p) => ({
+            product_name: p.product_name,
+            sales_count: p.quantity,
+          }))
+        )
+      } catch (err) {
+        setError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchAll()
   }, [])
+
+
 
   const popularProductsConfig = {
     data: popularProducts.slice(0, topN),
@@ -135,13 +119,26 @@ function AdminDashboard() {
           <h2>대시보드</h2>
         </div>
 
-        {/* 통계 카드 */}
+        {/* 에러 배너 */}
+        {error && (
+          <Alert
+            type="error"
+            message={error}
+            showIcon
+            style={{ marginBottom: '1rem' }}
+          />
+        )}
+
+        {/* 로딩 오버레이 */}
+        <Spin spinning={loading} size="large">
+
+
         <Row gutter={[16, 16]}>
           <Col xs={24} sm={12} lg={6}>
             <Card>
               <Statistic
                 title="총 주문 수"
-                value={stats.totalOrders}
+                value={stats.total_orders}
                 prefix={<ShoppingOutlined />}
                 valueStyle={{ color: '#007BFF' }}
               />
@@ -151,7 +148,7 @@ function AdminDashboard() {
             <Card>
               <Statistic
                 title="일 매출"
-                value={stats.dailyRevenue}
+                value={stats.daily_revenue}
                 prefix={<DollarOutlined />}
                 suffix="원"
                 valueStyle={{ color: '#28a745' }}
@@ -163,7 +160,7 @@ function AdminDashboard() {
             <Card>
               <Statistic
                 title="주 매출"
-                value={stats.weeklyRevenue}
+                value={stats.weekly_revenue}
                 prefix={<DollarOutlined />}
                 suffix="원"
                 valueStyle={{ color: '#28a745' }}
@@ -175,7 +172,7 @@ function AdminDashboard() {
             <Card>
               <Statistic
                 title="월 매출"
-                value={stats.monthlyRevenue}
+                value={stats.monthly_revenue}
                 prefix={<DollarOutlined />}
                 suffix="원"
                 valueStyle={{ color: '#28a745' }}
@@ -190,7 +187,7 @@ function AdminDashboard() {
             <Card>
               <Statistic
                 title="신규 회원 수"
-                value={stats.newMembers}
+                value={stats.new_members}
                 prefix={<UserAddOutlined />}
                 valueStyle={{ color: '#17a2b8' }}
               />
@@ -198,10 +195,10 @@ function AdminDashboard() {
           </Col>
           <Col xs={24} sm={12} lg={6}>
             <Card>
-              <Badge count={stats.lowStockCount} overflowCount={99}>
+              <Badge count={stats.low_stock_count} overflowCount={99}>
                 <Statistic
                   title="상품 재고 알림"
-                  value={stats.lowStockCount}
+                  value={stats.low_stock_count}
                   prefix={<WarningOutlined />}
                   valueStyle={{ color: '#dc3545' }}
                   suffix="개"
@@ -213,7 +210,7 @@ function AdminDashboard() {
             <Card>
               <Statistic
                 title="오늘 방문자 수"
-                value={stats.todayVisitors}
+                value={stats.today_visitors}
                 prefix={<EyeOutlined />}
                 valueStyle={{ color: '#6c757d' }}
               />
@@ -223,7 +220,7 @@ function AdminDashboard() {
             <Card>
               <Statistic
                 title="이번 주 방문자 수"
-                value={stats.weekVisitors}
+                value={stats.week_visitors}
                 prefix={<EyeOutlined />}
                 valueStyle={{ color: '#6c757d' }}
               />
@@ -258,6 +255,7 @@ function AdminDashboard() {
             </Card>
           </Col>
         </Row>
+        </Spin>
       </div>
     </div>
   )
