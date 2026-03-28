@@ -1,6 +1,15 @@
 # ecommerce-data-platform
 [이전 ecommerce-msa 프로젝트](https://github.com/gr1993/ecommerce-msa) 환경의 Kafka 이벤트를 기반으로 정산  (Settlement) 및 실시간 분석(Analytics) 서비스를 구현한 데이터 플랫폼 프로젝트  
 
+### 정산 이벤트 시뮬레이션 시연
+![settlement-event](./docs/settlement-event.gif)
+
+### 대시보드 이벤트 발생기 시연
+
+
+### 대시보드 시연
+![dashboard](./docs/dashboard.gif)
+
 
 ## 프로젝트 개요
 정산 서비스와 분석 서비스를 실제 운영 환경 관점에서 바라보면, 다음과 같은 구조로 설계된다. 
