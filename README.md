@@ -5,7 +5,7 @@
 ![settlement-event](./docs/settlement-event.gif)
 
 ### 대시보드 이벤트 발생기 시연
-
+![dashboard-event](./docs/dashboard-event.gif)
 
 ### 대시보드 시연
 ![dashboard](./docs/dashboard.gif)
