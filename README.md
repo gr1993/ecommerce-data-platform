@@ -108,3 +108,4 @@ Ledger는 회계 용어로, 계정 원장을 의미하며 기업의 수입, 지�
 
 ### 대시보드 및 매출 통계 화면
 ![dashboard](./docs/dashboard.png)
+![statistics](./docs/statistics.png)
