@@ -11,6 +11,9 @@
 }
 
 .dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 1.5rem;
 }
 
@@ -19,6 +22,24 @@
   margin: 0;
   font-size: 1.75rem;
   font-weight: 600;
+}
+
+.dashboard-last-updated {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  color: #6c757d;
+  background: #fff;
+  border: 1px solid #e9ecef;
+  border-radius: 20px;
+  padding: 4px 12px;
+  cursor: default;
+  transition: color 0.2s;
+}
+
+.dashboard-last-updated:hover {
+  color: #007BFF;
+  border-color: #007BFF;
 }
 
 .admin-dashboard .ant-card {

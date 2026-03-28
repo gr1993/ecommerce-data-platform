@@ -114,6 +114,18 @@ export const analyticsApi = {
   },
 
   /**
+   * 이번 달 판매량 기준 인기 상품 Top 5 (대시보드 전용)
+   * GET /api/v1/dashboard/popular-products
+   */
+  getDashboardPopularProducts: async (): Promise<ProductRevenue[]> => {
+    const response = await fetch(`${ANALYTICS_API_BASE_URL}/api/v1/dashboard/popular-products`)
+    if (!response.ok) {
+      throw new Error('인기 상품 데이터를 불러오는데 실패했습니다.')
+    }
+    return response.json()
+  },
+
+  /**
    * 일별 신규 가입자 추이
    * GET /api/v1/events/signups?startDate=&endDate=
    */

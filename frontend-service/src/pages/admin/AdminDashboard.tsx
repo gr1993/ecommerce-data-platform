@@ -1,11 +1,16 @@
-import { useState, useEffect } from 'react'
-import { Card, Row, Col, Statistic, Badge, Select, Spin, Alert } from 'antd'
-import { ShoppingOutlined, DollarOutlined, UserAddOutlined, WarningOutlined, EyeOutlined } from '@ant-design/icons'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { Card, Row, Col, Statistic, Badge, Select, Spin, Alert, Tooltip } from 'antd'
+import { ShoppingOutlined, DollarOutlined, UserAddOutlined, WarningOutlined, EyeOutlined, SyncOutlined } from '@ant-design/icons'
 import { Column, Line } from '@ant-design/charts'
-import { analyticsApi, type DashboardSummary, type ProductRevenue, type RevenueTrend } from '../../api/analyticsApi'
+import { analyticsApi, type DashboardSummary, type RevenueTrend } from '../../api/analyticsApi'
 import './AdminDashboard.css'
 
 const { Option } = Select
+
+/** 요약 카드 폴링 간격 (ms) */
+const SUMMARY_POLL_MS = 1_000   // 1초
+/** 차트 데이터 폴링 간격 (ms) */
+const CHART_POLL_MS  = 10_000   // 10초
 
 // ---- 날짜 helpers ----
 const fmt = (d: Date) => d.toISOString().slice(0, 10)
@@ -37,55 +42,110 @@ function AdminDashboard() {
   const [topN, setTopN] = useState<number>(5)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [syncing, setSyncing] = useState(false)
 
-  useEffect(() => {
-    const fetchAll = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const [summary, trend, products] = await Promise.all([
-          analyticsApi.getDashboardSummary(),
-          analyticsApi.getRevenueTrend(monthStart, today, 'daily'),
-          analyticsApi.getProductStats(monthStart, today, 15),
-        ])
+  // ---- 요약 카드 fetch (30초 폴링) ----
+  const fetchSummary = useCallback(async (isInitial = false) => {
+    if (!isInitial) setSyncing(true)
+    try {
+      const summary = await analyticsApi.getDashboardSummary()
+      setStats(summary)
+      setLastUpdated(new Date())
+    } catch (err) {
+      if (isInitial) {
+        setError(err instanceof Error ? err.message : '요약 데이터를 불러오는데 실패했습니다.')
+      } else {
+        console.warn('[Dashboard] 요약 폴링 실패 (이전 데이터 유지):', err)
+      }
+    } finally {
+      if (!isInitial) setSyncing(false)
+    }
+  }, [])
 
-        setStats(summary)
-
-        setRevenueTrend(trend.map((r) => ({ date: r.date, revenue: Number(r.revenue) })))
-
-        setPopularProducts(
-          (products as ProductRevenue[]).map((p) => ({
-            product_name: p.product_name,
-            sales_count: p.quantity,
-          }))
-        )
-      } catch (err) {
-        setError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
-      } finally {
-        setLoading(false)
+  // ---- 차트 데이터 fetch (10초 폴링) ----
+  const fetchCharts = useCallback(async (isInitial = false) => {
+    try {
+      const [trend, products] = await Promise.all([
+        analyticsApi.getRevenueTrend(monthStart, today, 'daily'),
+        analyticsApi.getDashboardPopularProducts(),
+      ])
+      setRevenueTrend(trend.map((r) => ({ date: r.date, revenue: Number(r.revenue) })))
+      setPopularProducts(
+        products.map((p) => ({
+          product_name: p.product_name,
+          sales_count: p.quantity,
+        }))
+      )
+    } catch (err) {
+      if (isInitial) {
+        setError(err instanceof Error ? err.message : '차트 데이터를 불러오는데 실패했습니다.')
+      } else {
+        console.warn('[Dashboard] 차트 폴링 실패 (이전 데이터 유지):', err)
       }
     }
-
-    fetchAll()
   }, [])
+
+  // ---- 최초 로딩 ----
+  useEffect(() => {
+    const initialLoad = async () => {
+      setLoading(true)
+      setError(null)
+      await Promise.all([fetchSummary(true), fetchCharts(true)])
+      setLastUpdated(new Date())
+      setLoading(false)
+    }
+    initialLoad()
+  }, [fetchSummary, fetchCharts])
+
+  // ---- 요약 폴링 (30초) ----
+  const summaryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  useEffect(() => {
+    summaryTimerRef.current = setInterval(() => fetchSummary(false), SUMMARY_POLL_MS)
+    return () => {
+      if (summaryTimerRef.current) clearInterval(summaryTimerRef.current)
+    }
+  }, [fetchSummary])
+
+  // ---- 차트 폴링 (2분) ----
+  const chartTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  useEffect(() => {
+    chartTimerRef.current = setInterval(() => fetchCharts(false), CHART_POLL_MS)
+    return () => {
+      if (chartTimerRef.current) clearInterval(chartTimerRef.current)
+    }
+  }, [fetchCharts])
 
 
 
   const popularProductsConfig = {
     data: popularProducts.slice(0, topN),
-    xField: 'sales_count',
-    yField: 'product_name',
+    xField: 'product_name',
+    yField: 'sales_count',
     seriesField: 'product_name',
     legend: false,
+    padding: [20, 20, 60, 40],
     meta: {
-      sales_count: {
-        alias: '판매 수량',
-      },
       product_name: {
         alias: '상품명',
+        range: [0.1, 0.9],  // 막대 및 눈금 중앙 정렬
+      },
+      sales_count: {
+        alias: '판매 수량',
+        nice: true,
+      },
+    },
+    xAxis: {
+      label: {
+        autoHide: false,
+        autoRotate: true,
+        style: { fontSize: 11 },
       },
     },
     color: '#007BFF',
+    columnStyle: {
+      radius: [4, 4, 0, 0],  // 위줹 둥근 모서리
+    },
   }
 
   const revenueTrendConfig = {
@@ -119,6 +179,14 @@ function AdminDashboard() {
       <div className="dashboard-container">
         <div className="dashboard-header">
           <h2>대시보드</h2>
+          {lastUpdated && (
+            <Tooltip title={`마지막 갱신: ${lastUpdated.toLocaleTimeString('ko-KR')}`}>
+              <span className="dashboard-last-updated">
+                <SyncOutlined spin={syncing} style={{ marginRight: 4 }} />
+                {lastUpdated.toLocaleTimeString('ko-KR')}
+              </span>
+            </Tooltip>
+          )}
         </div>
 
         {/* 에러 배너 */}
