@@ -11,6 +11,12 @@
 오류 데이터를 생성하는 기능은 정산 시스템의 Reconciliation(대조) 로직을 검증하기 위해 필수적인 요소이다.  
 
 
+### event-bot 화면
+![eventBot1](../docs/eventBot1.png)
+![eventBot2](../docs/eventBot2.png)
+![eventBot3](../docs/eventBot3.png)
+
+
 ### 프로젝트 패키지 구조
 ```
 com.example.eventbot
