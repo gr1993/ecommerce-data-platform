@@ -1,6 +1,7 @@
 package com.example.analyticsservice.controller;
 
 import com.example.analyticsservice.dto.DashboardSummaryDto;
+import com.example.analyticsservice.dto.ProductRevenueDto;
 import com.example.analyticsservice.repository.EventStatsRepository;
 import com.example.analyticsservice.repository.StatsRepository;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +13,7 @@ import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.temporal.TemporalAdjusters;
+import java.util.List;
 
 /**
  * AdminDashboard 전용 통합 요약 API.
@@ -68,6 +70,22 @@ public class DashboardController {
                 todayVisitors,
                 weekVisitors
         );
+    }
+
+    /**
+     * 이번 달 판매량 기준 인기 상품 Top 5.
+     *
+     * <pre>
+     * GET /api/v1/dashboard/popular-products
+     * </pre>
+     *
+     * 데이터 범위: 이번 달 1일 ~ 오늘 / limit 5 고정 / quantity DESC
+     */
+    @GetMapping("/popular-products")
+    public List<ProductRevenueDto> getPopularProducts() {
+        LocalDate today      = LocalDate.now();
+        LocalDate monthStart = today.withDayOfMonth(1);
+        return statsRepository.getTopProductsByQuantity(monthStart, today, 5);
     }
 
     private BigDecimal sumRevenue(StatsRepository repo, LocalDate from, LocalDate to) {

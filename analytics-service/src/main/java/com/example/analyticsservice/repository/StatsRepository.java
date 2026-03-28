@@ -62,6 +62,32 @@ public class StatsRepository {
         ), startDate, endDate, limit);
     }
 
+    /**
+     * 판매량(quantity) 기준 인기 상품 Top N.
+     * 대시보드 전용 — ORDER BY quantity DESC LIMIT ?
+     */
+    public List<ProductRevenueDto> getTopProductsByQuantity(LocalDate startDate, LocalDate endDate, int limit) {
+        String sql = """
+            SELECT
+                product_id,
+                product_name,
+                sum(daily_revenue)  as revenue,
+                sum(daily_quantity) as quantity
+            FROM default.daily_product_revenue_mv
+            WHERE sale_date BETWEEN ? AND ?
+            GROUP BY product_id, product_name
+            ORDER BY quantity DESC
+            LIMIT ?
+            """;
+
+        return jdbcTemplate.query(sql, (rs, rowNum) -> new ProductRevenueDto(
+            rs.getLong("product_id"),
+            rs.getString("product_name"),
+            rs.getBigDecimal("revenue"),
+            rs.getLong("quantity")
+        ), startDate, endDate, limit);
+    }
+
     public List<RevenueTrendDto> getRevenueTrend(LocalDate startDate, LocalDate endDate, String period) {
         // ClickHouse의 날짜 변환 함수 활용
         String dateFunc = switch (period.toLowerCase()) {
