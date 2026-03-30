@@ -15,8 +15,7 @@ ecommerce-data-platform/
     │   ├── ksqldb/
     │   └── postgres/
     └── apps/               # 비즈니스 마이크로서비스 (Stateless 기반)
-        ├── order-service.yaml
-        ├── payment-service.yaml
+        ├── settlement-service.yaml
         └── product-service.yaml
 ```
 
@@ -54,13 +53,17 @@ kubectl create namespace postgres
 
 helm install postgres bitnami/postgresql -f infra/platforms/postgres/postgres-values.yaml -n postgres
 # 호스트에서 postgres 접근 시 연결
-kubectl port-forward svc/postgres-postgresql 5432:5432
+kubectl port-forward svc/postgres-postgresql -n postgres 5432:5432
 
 
 # clickhouse
 kubectl apply -f infra/platforms/clickhouse/clickhouse.yaml
 # 호스트에서 clickhouse 접근 시 연결
 kubectl port-forward svc/clickhouse-svc -n clickhouse 8123:8123
+
+
+# 서비스 실행
+kubectl apply -f infra/apps/settlement-service.yaml
 ```
 
 

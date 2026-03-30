@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: settlement-deployment
+  labels:
+    app: settlement
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: settlement
+  template:
+    metadata:
+      labels:
+        app: settlement
+    spec:
+      containers:
+      - name: settlement-container
+        image: gr1993/settlement:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "prod"
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+
+        livenessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 40
+          periodSeconds: 10
+          failureThreshold: 3 # 3번 연속 실패 시 재시작 (총 30초 더 대기)
+
+        readinessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 40
+          periodSeconds: 5
+          failureThreshold: 3 # 3번 연속 실패 시 서비스 제외 (총 15초 더 대기)
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: settlement-service
+spec:
+  type: ClusterIP
+  selector:
+    app: settlement
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
