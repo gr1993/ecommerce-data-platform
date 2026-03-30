@@ -17,6 +17,18 @@ ClickHouse에 적재하고, 이후 모든 집계 및 조회는 ClickHouse에서 
 * [ClickHouse 정리 블로그](https://little-pecorino-c28.notion.site/ClickHouse-32d82094ef0a805f879bfe3b97967611)
 
 
+### 이미지 배포
+```shell
+# Docker Hub 로그인
+docker login
+
+# 이미지 빌드
+docker build -t gr1993/analytics:latest .
+# 이미지 저장소에 업로드
+docker push gr1993/analytics:latest
+```
+
+
 ### ClickHouse
 ksqlDB를 활용해 데이터를 ClickHouse에 적합한 형태로 가공한 뒤, 별도의 Kafka Connector나  
 Kafka Consumer를 두지 않고 **ClickHouse의 Kafka Engine을 통해 Kafka 토픽을 직접 구독**하여  

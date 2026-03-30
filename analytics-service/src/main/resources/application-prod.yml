@@ -1,0 +1,9 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:clickhouse://clickhouse-svc.clickhouse:8123/default
+    driver-class-name: com.clickhouse.jdbc.ClickHouseDriver
+    username: admin
+    password: admin123

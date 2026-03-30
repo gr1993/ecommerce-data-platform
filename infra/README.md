@@ -62,8 +62,11 @@ kubectl apply -f infra/platforms/clickhouse/clickhouse.yaml
 kubectl port-forward svc/clickhouse-svc -n clickhouse 8123:8123
 
 
-# 서비스 실행
+# settlement-service 실행
 kubectl apply -f infra/apps/settlement-service.yaml
+# analytics-service 실행
+# 최초 실행 시 analytics-service 프로젝트 resources/db 경로에 스키마 파일들을 적용해야 함
+kubectl apply -f infra/apps/analytics-service.yaml
 ```
 
 
