@@ -17,6 +17,18 @@
 ![eventBot3](../docs/eventBot3.png)
 
 
+### 이미지 배포
+```shell
+# Docker Hub 로그인
+docker login
+
+# 이미지 빌드
+docker build -t gr1993/eventbot:latest .
+# 이미지 저장소에 업로드
+docker push gr1993/eventbot:latest
+```
+
+
 ### 프로젝트 패키지 구조
 ```
 com.example.eventbot

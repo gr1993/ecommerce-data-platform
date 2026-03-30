@@ -16,7 +16,8 @@ ecommerce-data-platform/
     │   └── postgres/
     └── apps/               # 비즈니스 마이크로서비스 (Stateless 기반)
         ├── settlement-service.yaml
-        └── product-service.yaml
+        ├── analytics-service.yaml
+        └── event-bot.yaml
 ```
 
 위와 같은 구조로 구성한 이유는 아래와 같다.
@@ -67,6 +68,11 @@ kubectl apply -f infra/apps/settlement-service.yaml
 # analytics-service 실행
 # 최초 실행 시 analytics-service 프로젝트 resources/db 경로에 스키마 파일들을 적용해야 함
 kubectl apply -f infra/apps/analytics-service.yaml
+
+# event-bot 실행
+kubectl apply -f infra/apps/event-bot.yaml
+# 호스트에서 event-bot 접근 시 연결
+kubectl port-forward svc/eventbot-service 80:80
 ```
 
 
